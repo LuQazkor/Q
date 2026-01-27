@@ -1,209 +1,238 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Hybrid GLB World</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta charset="utf-8"/>
+<title>GLB Overwatch Viewer v23</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+
 <style>
-html,body{margin:0;overflow:hidden;background:#000;font-family:sans-serif}
-#ui{
-  position:fixed;top:10px;left:10px;z-index:10;
-  background:rgba(0,0,0,.6);padding:10px;border-radius:8px;color:#fff
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#063636;
+  touch-action:none;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont;
 }
-button,input,select{width:100%;margin:4px 0}
-.joystick{
-  position:fixed;bottom:20px;width:120px;height:120px;
-  border-radius:50%;background:rgba(255,255,255,.1)
+
+#hud{
+  position:absolute;
+  top:12px;
+  left:12px;
+  background:rgba(0,0,0,.6);
+  color:#fff;
+  padding:12px 14px;
+  border-radius:14px;
+  font-size:14px;
+  z-index:10;
 }
-#leftJoy{left:20px}
-#rightJoy{right:20px}
+
+#version{
+  position:absolute;
+  top:12px;
+  right:12px;
+  background:#000;
+  color:#6ff;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  z-index:10;
+}
+
+.joy{
+  position:absolute;
+  bottom:24px;
+  width:140px;
+  height:140px;
+  border-radius:50%;
+  background:rgba(255,255,255,.08);
+  touch-action:none;
+  z-index:10;
+}
+
+#joyL{ left:24px; }
+#joyR{ right:24px; }
+
 .knob{
-  position:absolute;left:40px;top:40px;width:40px;height:40px;
-  border-radius:50%;background:rgba(255,255,255,.4)
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:60px;
+  height:60px;
+  margin:-30px;
+  border-radius:50%;
+  background:rgba(255,255,255,.35);
 }
 </style>
 </head>
+
 <body>
-
-<div id="ui">
-  <input type="file" id="fileInput" multiple accept=".glb">
-  <button onclick="saveWorld()">💾 Save World</button>
-  <select id="worlds" onchange="loadWorld()"></select>
+<div id="hud">
+<b>FINAL HUMAN CONTROL MODEL</b><br/>
+👁 Look: 1-finger drag<br/>
+🕹 Move: dual joysticks<br/>
+✋ Tap: interact
 </div>
+<div id="version">v23</div>
 
-<div id="leftJoy" class="joystick"><div class="knob"></div></div>
-<div id="rightJoy" class="joystick"><div class="knob"></div></div>
+<div id="joyL" class="joy"><div class="knob"></div></div>
+<div id="joyR" class="joy"><div class="knob"></div></div>
 
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js';
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x202020);
+<script>
+/* -------------------- CANVAS / ENGINE -------------------- */
+const canvas=document.createElement("canvas");
+canvas.style.position="fixed";
+canvas.style.top="0";
+canvas.style.left="0";
+canvas.style.width="100vw";
+canvas.style.height="100vh";
+document.body.appendChild(canvas);
 
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,10000);
-camera.position.set(0,2,6);
+const engine=new BABYLON.Engine(canvas,true);
+const scene=new BABYLON.Scene(engine);
+scene.clearColor=new BABYLON.Color4(0.04,0.22,0.22,1);
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableZoom=false;
-controls.enablePan=false;
-
-scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.2));
-
-const ground=new THREE.Mesh(
-  new THREE.PlaneGeometry(500,500),
-  new THREE.MeshStandardMaterial({color:0x333333})
+/* -------------------- CAMERA -------------------- */
+const camera=new BABYLON.UniversalCamera(
+  "cam",new BABYLON.Vector3(0,5,-15),scene
 );
-ground.rotation.x=-Math.PI/2;
-scene.add(ground);
+camera.attachControl(canvas,false);
+camera.minZ=0.1;
+camera.fov=0.9;
+scene.activeCamera=camera;
 
-const loader=new GLTFLoader();
-const objects=[];
-const fileMap=new Map();
-let avatar=null;
+/* -------------------- LIGHT -------------------- */
+new BABYLON.HemisphericLight("h",
+  new BABYLON.Vector3(0,1,0),scene);
 
-/* ---------- NORMALIZE ---------- */
-function normalize(m){
-  const box=new THREE.Box3().setFromObject(m);
-  const size=box.getSize(new THREE.Vector3()).length();
-  m.scale.setScalar(2/size);
-}
+/* -------------------- GRID -------------------- */
+const grid=BABYLON.MeshBuilder.CreateGround(
+  "grid",{width:1000,height:1000},scene
+);
+const gm=new BABYLON.StandardMaterial("gm",scene);
+gm.wireframe=true;
+gm.emissiveColor=new BABYLON.Color3(0,1,1);
+grid.material=gm;
 
-/* ---------- LOAD FROM SERVER /glb ---------- */
-async function loadServerGLBs(){
-  try{
-    const res=await fetch('/glb/index.json');
-    const list=await res.json();
-    list.forEach((name,i)=>{
-      loader.load('/glb/'+name,g=>{
-        const m=g.scene;
-        normalize(m);
-        m.position.set(i*5,0,0);
-        m.userData.file=name;
-        scene.add(m);
-        objects.push(m);
-        if(!avatar) avatar=m;
-      });
-    });
-  }catch(e){
-    console.warn('No /glb/index.json found');
-  }
-}
-loadServerGLBs();
+/* -------------------- PLAYER ROOT -------------------- */
+const playerRoot=new BABYLON.TransformNode("player",scene);
 
-/* ---------- BROWSER UPLOAD ---------- */
-fileInput.onchange=e=>{
-  [...e.target.files].forEach((f,i)=>{
-    const url=URL.createObjectURL(f);
-    fileMap.set(f.name,url);
-    loader.load(url,g=>{
-      const m=g.scene;
-      normalize(m);
-      m.position.set(objects.length*4,0,0);
-      m.userData.file=f.name;
-      scene.add(m);
-      objects.push(m);
-      if(!avatar) avatar=m;
-    });
+/* -------------------- JOYSTICKS -------------------- */
+function makeJoy(el){
+  const knob=el.querySelector(".knob");
+  let dx=0,dy=0,active=false;
+
+  el.addEventListener("pointerdown",e=>{
+    active=true;
+    el.setPointerCapture(e.pointerId);
   });
-};
 
-/* ---------- SAVE / LOAD WORLD ---------- */
-function saveWorld(){
-  const name=prompt('World name');
-  if(!name) return;
-  localStorage.setItem(
-    'world_'+name,
-    JSON.stringify(objects.map(o=>({
-      file:o.userData.file,
-      pos:o.position.toArray(),
-      rot:o.rotation.toArray(),
-      scale:o.scale.toArray()
-    })))
-  );
-  refreshWorlds();
-}
-window.saveWorld=saveWorld;
-
-function loadWorld(){
-  const key='world_'+worlds.value;
-  if(!localStorage.getItem(key)) return;
-
-  objects.forEach(o=>scene.remove(o));
-  objects.length=0;
-  avatar=null;
-
-  JSON.parse(localStorage.getItem(key)).forEach(d=>{
-    const src=fileMap.get(d.file) || '/glb/'+d.file;
-    loader.load(src,g=>{
-      const m=g.scene;
-      m.position.fromArray(d.pos);
-      m.rotation.fromArray(d.rot);
-      m.scale.fromArray(d.scale);
-      m.userData.file=d.file;
-      scene.add(m);
-      objects.push(m);
-      if(!avatar) avatar=m;
-    });
+  el.addEventListener("pointermove",e=>{
+    if(!active) return;
+    const r=el.getBoundingClientRect();
+    dx=(e.clientX-(r.left+r.width/2))/(r.width/2);
+    dy=(e.clientY-(r.top+r.height/2))/(r.height/2);
+    dx=Math.max(-1,Math.min(1,dx));
+    dy=Math.max(-1,Math.min(1,dy));
+    knob.style.transform=`translate(${dx*40}px,${dy*40}px)`;
   });
+
+  el.addEventListener("pointerup",()=>{
+    active=false; dx=dy=0;
+    knob.style.transform="";
+  });
+
+  return ()=>({x:dx,y:dy});
 }
 
-function refreshWorlds(){
-  worlds.innerHTML='<option>Load World</option>';
-  Object.keys(localStorage)
-    .filter(k=>k.startsWith('world_'))
-    .forEach(k=>{
-      const o=document.createElement('option');
-      o.textContent=o.value=k.replace('world_','');
-      worlds.appendChild(o);
-    });
-}
-refreshWorlds();
+const joyL=makeJoy(document.getElementById("joyL"));
+const joyR=makeJoy(document.getElementById("joyR"));
 
-/* ---------- JOYSTICKS ---------- */
-function joystick(el,cb){
-  let a=false,k=el.firstChild;
-  el.onpointerdown=()=>a=true;
-  onpointerup=()=>{a=false;k.style.transform='';cb(0,0);}
-  onpointermove=e=>{
-    if(!a) return;
-    const r=60,x=Math.max(-r,Math.min(r,e.movementX)),
-          y=Math.max(-r,Math.min(r,e.movementY));
-    k.style.transform=`translate(${x}px,${y}px)`;
-    cb(x/r,y/r);
-  };
-}
+/* -------------------- LOOK (1 FINGER OFF JOYSTICKS) -------------------- */
+let lx=0,ly=0,looking=false;
+canvas.addEventListener("pointerdown",e=>{
+  if(e.target.classList.contains("joy")||
+     e.target.closest(".joy")) return;
+  looking=true;
+  lx=e.clientX; ly=e.clientY;
+});
+canvas.addEventListener("pointermove",e=>{
+  if(!looking) return;
+  camera.rotation.y+=(e.clientX-lx)*0.002;
+  camera.rotation.x+=(e.clientY-ly)*0.002;
+  camera.rotation.x=Math.max(-1.4,Math.min(1.4,camera.rotation.x));
+  lx=e.clientX; ly=e.clientY;
+});
+canvas.addEventListener("pointerup",()=>looking=false);
 
-const move={x:0,y:0,z:0};
-joystick(leftJoy,(x,y)=>{move.x=x;move.z=y});
-joystick(rightJoy,(x,y)=>{move.y=-y;move.x+=x*0.5});
+/* -------------------- LOAD MANIFEST -------------------- */
+async function loadAllGLBs(){
+  const res=await fetch("/glb/index.json");
+  const files=await res.json();
 
-/* ---------- LOOP ---------- */
-function animate(){
-  requestAnimationFrame(animate);
-  if(avatar){
-    avatar.position.x+=move.x*0.1;
-    avatar.position.z+=move.z*0.1;
-    avatar.position.y+=move.y*0.1;
-    camera.position.lerp(
-      avatar.position.clone().add(new THREE.Vector3(0,2,6)),0.1
+  let spacing=0;
+  for(const file of files){
+    const result=await BABYLON.SceneLoader.ImportMeshAsync(
+      null,"/glb/",file,scene
     );
-    camera.lookAt(avatar.position);
-  }
-  renderer.render(scene,camera);
-}
-animate();
 
-onresize=()=>{
-  camera.aspect=innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-};
+    const root=result.meshes[0];
+    root.computeWorldMatrix(true);
+
+    // Normalize size
+    const bounds=root.getHierarchyBoundingVectors();
+    const size=bounds.max.subtract(bounds.min).length();
+    const scale=10/size;
+    root.scaling.scaleInPlace(scale);
+
+    if(file==="avatar.glb"){
+      root.parent=playerRoot;
+      root.position.set(0,0,0);
+      camera.parent=playerRoot;
+      camera.position.set(0,3,-8);
+    }else{
+      root.position=new BABYLON.Vector3(
+        (spacing%5)*40-80,
+        0,
+        Math.floor(spacing/5)*40
+      );
+      spacing++;
+    }
+  }
+}
+
+loadAllGLBs();
+
+/* -------------------- MOVEMENT (FLIGHT) -------------------- */
+scene.onBeforeRenderObservable.add(()=>{
+  const l=joyL(), r=joyR();
+  const speed=0.6;
+
+  const forward=new BABYLON.Vector3(
+    Math.sin(camera.rotation.y),
+    0,
+    Math.cos(camera.rotation.y)
+  );
+  const right=new BABYLON.Vector3(
+    Math.sin(camera.rotation.y+Math.PI/2),
+    0,
+    Math.cos(camera.rotation.y+Math.PI/2)
+  );
+
+  playerRoot.position.addInPlace(forward.scale(-l.y*speed));
+  playerRoot.position.addInPlace(right.scale(l.x*speed));
+  playerRoot.position.y+=r.y*speed;
+  playerRoot.position.addInPlace(right.scale(r.x*speed));
+});
+
+/* -------------------- LOOP -------------------- */
+engine.runRenderLoop(()=>scene.render());
+addEventListener("resize",()=>{
+  engine.resize();
+});
 </script>
 </body>
 </html>
