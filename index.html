@@ -2,22 +2,21 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Babylon Avatar World</title>
+<title>Babylon Flying Avatar (Stable)</title>
 <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
 <style>
 html, body {
   width: 100%;
   height: 100%;
   margin: 0;
-  padding: 0;
   overflow: hidden;
   background: #000;
 }
 canvas {
   width: 100vw !important;
   height: 100vh !important;
-  touch-action: none;
   display: block;
+  touch-action: none;
 }
 #ui {
   position: fixed;
@@ -30,11 +29,11 @@ canvas {
 }
 </style>
 </head>
-
 <body>
+
 <div id="ui">
   <input type="file" id="file" multiple accept=".glb"><br>
-  WASD / Touch · Fly
+  WASD move · QE up/down
 </div>
 
 <canvas id="renderCanvas"></canvas>
@@ -48,17 +47,12 @@ const engine = new BABYLON.Engine(canvas, true, { adaptToDeviceRatio: true });
 const scene = new BABYLON.Scene(engine);
 scene.clearColor = new BABYLON.Color4(0.05,0.06,0.08,1);
 
-// Lights
+// Light
 new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
 
-// --- Avatar root ---
+// --- Avatar ---
 const avatar = new BABYLON.TransformNode("avatar", scene);
 avatar.position.set(0, 1.6, 0);
-
-// --- Head target ---
-const head = new BABYLON.TransformNode("head", scene);
-head.parent = avatar;
-head.position.y = 1.5;
 
 // Visible body
 const body = BABYLON.MeshBuilder.CreateCapsule("body", {
@@ -68,19 +62,24 @@ const body = BABYLON.MeshBuilder.CreateCapsule("body", {
 body.parent = avatar;
 body.position.y = 0.9;
 
+// Head target
+const head = new BABYLON.TransformNode("head", scene);
+head.parent = avatar;
+head.position.y = 1.5;
+
 // --- Camera ---
 const camera = new BABYLON.UniversalCamera(
   "cam",
-  new BABYLON.Vector3(0, 2.5, -5),
+  new BABYLON.Vector3(0, 3, -6),
   scene
 );
 camera.attachControl(canvas, true);
 camera.speed = 0;
+camera.angularSensibility = 5000;
 camera.minZ = 0.05;
-camera.angularSensibility = 4500;
 
-// --- Camera follow config ---
-const camOffset = new BABYLON.Vector3(0, 1.0, -4.5);
+// --- Camera follow ---
+const camOffset = new BABYLON.Vector3(0, 1.2, -5);
 let camPos = camera.position.clone();
 
 // --- Input ---
@@ -95,36 +94,41 @@ window.addEventListener("keydown", e => {
 });
 window.addEventListener("keyup", () => input.f = input.r = input.u = 0);
 
-// --- Render loop ---
+// --- Constants ---
+const MOVE_SPEED = 6;
+const TURN_SPEED = 2.5;
+
+// --- Loop ---
 scene.onBeforeRenderObservable.add(() => {
-  const dt = engine.getDeltaTime() * 0.004;
+  const dt = engine.getDeltaTime() / 1000;
 
-  const forward = camera.getDirection(BABYLON.Axis.Z);
-  const right = camera.getDirection(BABYLON.Axis.X);
+  // Rotate avatar (yaw)
+  avatar.rotation.y += input.r * TURN_SPEED * dt;
 
-  avatar.position.addInPlace(forward.scale(input.f * dt * 8));
-  avatar.position.addInPlace(right.scale(input.r * dt * 8));
-  avatar.position.y += input.u * dt * 8;
+  // Avatar forward vector (OWN space)
+  const forward = new BABYLON.Vector3(
+    Math.sin(avatar.rotation.y),
+    0,
+    Math.cos(avatar.rotation.y)
+  );
 
-  // Rotate avatar toward camera forward
-  avatar.rotation.y = Math.atan2(forward.x, forward.z);
+  // Move
+  avatar.position.addInPlace(forward.scale(input.f * MOVE_SPEED * dt));
+  avatar.position.y += input.u * MOVE_SPEED * dt;
 
   // Camera follow
   const rot = BABYLON.Matrix.RotationY(avatar.rotation.y);
-  const desiredOffset = BABYLON.Vector3.TransformCoordinates(camOffset, rot);
-  const desiredPos = avatar.position.add(desiredOffset);
+  const offset = BABYLON.Vector3.TransformCoordinates(camOffset, rot);
+  const desired = avatar.position.add(offset);
 
-  camPos = BABYLON.Vector3.Lerp(camPos, desiredPos, 0.18);
+  camPos = BABYLON.Vector3.Lerp(camPos, desired, 0.15);
   camera.position.copyFrom(camPos);
-
   camera.setTarget(head.getAbsolutePosition());
 });
 
-// Resize FIX
+engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
 engine.resize();
-
-engine.runRenderLoop(() => scene.render());
 </script>
 </body>
 </html>
