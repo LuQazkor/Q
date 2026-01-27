@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Babylon Flying GLB World</title>
+<title>Babylon Flying Avatar World</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <style>
 html, body {
@@ -22,13 +22,20 @@ html, body {
   font-family: monospace;
   font-size: 13px;
 }
+#lockBtn {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #111;
+  border: 1px solid #0f0;
+  color: #0f0;
+}
 </style>
 </head>
 <body>
 
 <div id="ui">
-  <input type="file" id="file" multiple accept=".glb">
-  <div>WASD / Touch · Fly Avatar</div>
+  <input type="file" id="file" multiple accept=".glb"><br>
+  <button id="lockBtn">LOCK CAM</button>
 </div>
 
 <canvas id="renderCanvas"></canvas>
@@ -38,49 +45,56 @@ html, body {
 
 <script>
 const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true, {
-  preserveDrawingBuffer: true,
-  stencil: true
-});
-
+const engine = new BABYLON.Engine(canvas, true);
 const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.05, 0.06, 0.08, 1);
+scene.clearColor = new BABYLON.Color4(0.05,0.06,0.08,1);
 
 // Lights
 new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
 const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.5,-1,-0.5), scene);
 sun.position.set(10,20,10);
 
-// --- Avatar Root ---
+// --- Avatar ---
 const avatar = new BABYLON.TransformNode("avatar", scene);
 avatar.position.y = 1.6;
 
-// Visible body (placeholder)
+// Placeholder body (swap with your GLB avatar later)
 const body = BABYLON.MeshBuilder.CreateCapsule("body", {
   height: 1.8,
   radius: 0.35
 }, scene);
 body.parent = avatar;
 body.position.y = 0.9;
-body.material = new BABYLON.StandardMaterial("m", scene);
-body.material.diffuseColor = new BABYLON.Color3(0.4, 0.7, 1);
+const mat = new BABYLON.StandardMaterial("m", scene);
+mat.diffuseColor = new BABYLON.Color3(0.4,0.7,1);
+body.material = mat;
 
-// --- Camera (behind + above head) ---
+// --- Camera ---
 const camera = new BABYLON.UniversalCamera(
   "cam",
-  new BABYLON.Vector3(0, 1.6, -3),
+  new BABYLON.Vector3(0, 2, -4),
   scene
 );
-camera.parent = avatar;
 camera.attachControl(canvas, true);
-camera.speed = 0; // movement handled manually
-camera.angularSensibility = 4000;
+camera.speed = 0;
 camera.minZ = 0.01;
+camera.angularSensibility = 4000;
 
-// --- World Root ---
+// --- Camera Lock ---
+let camLocked = true;
+const camOffset = new BABYLON.Vector3(0, 1.6, -4);
+const camTarget = new BABYLON.Vector3();
+
+document.getElementById("lockBtn").onclick = () => {
+  camLocked = !camLocked;
+  document.getElementById("lockBtn").textContent =
+    camLocked ? "UNLOCK CAM" : "LOCK CAM";
+};
+
+// --- World ---
 const world = new BABYLON.TransformNode("world", scene);
 
-// --- GLB Loader ---
+// Load GLBs
 document.getElementById("file").addEventListener("change", e => {
   [...e.target.files].forEach((file, i) => {
     BABYLON.SceneLoader.Append(
@@ -88,21 +102,20 @@ document.getElementById("file").addEventListener("change", e => {
       URL.createObjectURL(file),
       scene,
       () => {
-        const meshes = scene.meshes.filter(m => m.name !== body.name);
-        const root = meshes[meshes.length - 1];
-        root.position.x = i * 12;
+        const root = scene.meshes[scene.meshes.length - 1];
+        root.position.x = i * 14;
 
         if (i === 0) {
           const bounds = root.getHierarchyBoundingVectors();
           const size = bounds.max.subtract(bounds.min).length();
-          avatar.position.set(0, size * 0.3, size * 1.2);
+          avatar.position.set(0, size * 0.3, size * 1.4);
         }
       }
     );
   });
 });
 
-// --- Controls ---
+// --- Movement ---
 const input = { f:0, r:0, u:0 };
 window.addEventListener("keydown", e => {
   if (e.code === "KeyW") input.f = 1;
@@ -112,19 +125,39 @@ window.addEventListener("keydown", e => {
   if (e.code === "KeyE") input.u = 1;
   if (e.code === "KeyQ") input.u = -1;
 });
-window.addEventListener("keyup", e => {
-  input.f = input.r = input.u = 0;
-});
+window.addEventListener("keyup", () => input.f = input.r = input.u = 0);
 
 // --- Render Loop ---
 scene.onBeforeRenderObservable.add(() => {
   const dt = engine.getDeltaTime() * 0.003;
+
+  // Move avatar
   const forward = camera.getDirection(BABYLON.Axis.Z);
   const right = camera.getDirection(BABYLON.Axis.X);
 
   avatar.position.addInPlace(forward.scale(input.f * dt * 10));
   avatar.position.addInPlace(right.scale(input.r * dt * 10));
   avatar.position.y += input.u * dt * 10;
+
+  // Face movement direction
+  if (camLocked && forward.length() > 0.001) {
+    avatar.rotation.y = Math.atan2(forward.x, forward.z);
+  }
+
+  // Camera lock
+  if (camLocked) {
+    const rot = BABYLON.Matrix.RotationY(avatar.rotation.y);
+    const offset = BABYLON.Vector3.TransformCoordinates(camOffset, rot);
+    camTarget.copyFrom(avatar.position).addInPlace(offset);
+
+    camera.position = BABYLON.Vector3.Lerp(
+      camera.position,
+      camTarget,
+      0.15
+    );
+
+    camera.setTarget(avatar.position.add(new BABYLON.Vector3(0,1.4,0)));
+  }
 });
 
 engine.runRenderLoop(() => scene.render());
