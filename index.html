@@ -1,172 +1,192 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>GLB Overwatch Grid v22</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
-
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
+<meta charset="utf-8" />
+<title>GLB Overwatch Viewer v21</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
 
 <style>
-html,body{margin:0;padding:0;overflow:hidden;background:#0e2525;}
-#c{width:100vw;height:100vh;touch-action:none;display:block;}
-
-#status,#debug{
-position:fixed;left:12px;
-background:rgba(0,0,0,.65);
-color:#e6ffff;font-family:system-ui;
-padding:12px 14px;border-radius:14px;
-font-size:13px;line-height:1.35;
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0b3a3a;
+  touch-action: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont;
 }
 
-#status{top:12px;}
-#debug{top:120px;min-width:220px;}
-
-#pad{
-position:fixed;bottom:24px;left:50%;
-transform:translateX(-50%);
-width:180px;height:360px;
-border-radius:180px;
-background:rgba(255,255,255,.08);
-display:grid;
-grid-template-columns:1fr 1fr 1fr;
-grid-template-rows:repeat(5,1fr);
-gap:8px;padding:14px;
+#hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
 }
 
-.btn{
-background:rgba(255,255,255,.2);
-border-radius:14px;
-display:flex;align-items:center;justify-content:center;
-font-size:22px;color:white;
-user-select:none;
+#version {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #000;
+  color: #6ff;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+#movePad {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  height: 120px;
+  border-radius: 60px;
+  background: rgba(255,255,255,0.06);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+  padding: 10px;
+}
+
+.moveBtn {
+  background: rgba(255,255,255,0.15);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+  user-select: none;
+}
+
+.moveBtn:active {
+  background: rgba(255,255,255,0.35);
 }
 </style>
 </head>
 
 <body>
-<canvas id="c"></canvas>
+<div id="hud">
+  <b>FINAL HUMAN CONTROL MODEL (LOCKED)</b><br/>
+  👁 Look: 1-finger drag anywhere<br/>
+  🧍 Move: arrows only (hold)<br/>
+  ✋ Tap: interact
+</div>
+<div id="version">v21</div>
 
-<div id="status">
-<b>Status v22</b><br>
-LOOK — drag anywhere<br>
-MOVE — arrows only<br>
-TAP — interact
+<div id="movePad">
+  <div class="moveBtn" data-dir="left">←</div>
+  <div class="moveBtn" data-dir="forward">↑</div>
+  <div class="moveBtn" data-dir="right">→</div>
+  <div class="moveBtn" data-dir="down">↓</div>
+  <div class="moveBtn" data-dir="up">↑↑</div>
+  <div class="moveBtn" data-dir="downZ">↓↓</div>
 </div>
 
-<div id="debug">booting…</div>
-
-<div id="pad">
-<div></div><div class="btn" data-m="up">↑</div><div></div>
-<div class="btn" data-m="left">←</div><div class="btn" data-m="forward">↖</div><div class="btn" data-m="right">→</div>
-<div></div><div class="btn" data-m="back">↙</div><div></div>
-<div></div><div class="btn" data-m="down">↓</div><div></div>
-</div>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
 
 <script>
-const canvas=document.getElementById("c");
-const engine=new BABYLON.Engine(canvas,true);
-const scene=new BABYLON.Scene(scene);
-scene.clearColor=new BABYLON.Color3(.06,.15,.15);
+const canvas = document.createElement("canvas");
+canvas.style.width = "100%";
+canvas.style.height = "100%";
+document.body.appendChild(canvas);
 
-const debug=document.getElementById("debug");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.05,0.2,0.2,1);
 
-/* CAMERA — OVERWATCH */
-const cam=new BABYLON.ArcRotateCamera(
-"cam",
-Math.PI/4,1.2,90,
-BABYLON.Vector3.Zero(),
-scene
-);
-cam.attachControl(canvas,true);
-cam.wheelDeltaPercentage=0;
-cam.panningSensibility=0;
-cam.lowerRadiusLimit=30;
-cam.upperRadiusLimit=200;
+const camera = new BABYLON.UniversalCamera("cam",
+  new BABYLON.Vector3(0, 40, -60), scene);
+camera.setTarget(BABYLON.Vector3.Zero());
+camera.attachControl(canvas, false);
 
-/* LIGHT */
-new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene);
+camera.speed = 0;
+camera.angularSensibility = 800;
 
-/* GRID */
-const ground=BABYLON.MeshBuilder.CreateGround("g",{width:300,height:300},scene);
-const gm=new BABYLON.GridMaterial("gm",scene);
-gm.majorUnitFrequency=10;
-gm.minorUnitVisibility=.4;
-ground.material=gm;
+const light = new BABYLON.HemisphericLight("h",
+  new BABYLON.Vector3(0,1,0), scene);
 
-/* AVATAR */
+const grid = BABYLON.MeshBuilder.CreateGround("grid",
+  {width:400, height:400}, scene);
+const gridMat = new BABYLON.StandardMaterial("gm", scene);
+gridMat.wireframe = true;
+gridMat.emissiveColor = new BABYLON.Color3(0,1,1);
+grid.material = gridMat;
+
 let avatar;
-BABYLON.SceneLoader.ImportMesh("", "./glb/", "avatar.glb", scene, meshes=>{
-avatar=new BABYLON.TransformNode("avatar",scene);
-meshes.forEach(m=>m.parent=avatar);
-avatar.position.set(0,1,0);
-cam.target=avatar.position;
+BABYLON.SceneLoader.ImportMeshAsync(
+  null, "/glb/", "avatar.glb", scene
+).then(res=>{
+  avatar = res.meshes[0];
+  avatar.scaling.scaleInPlace(1);
+  avatar.position = new BABYLON.Vector3(0,0,0);
 });
 
-/* WORLDS */
-const files=[
-"office.glb","ICU.glb","city_pack_8.glb",
-"1970_dodge_challenger_rt.glb","sphere.glb"
+const worlds = [];
+const spacing = 40;
+const files = [];
+
+fetch("/glb/").catch(()=>{}); // keeps path alive
+
+// MANUAL LIST — SIMPLE & RELIABLE
+const GLBS = [
+  "ICU.glb",
+  "office.glb",
+  "city_pack_8.glb",
+  "1970_dodge_challenger_rt.glb"
 ];
 
-let loadedWorlds=0;
-const spacing=40;
-
-files.forEach((f,i)=>{
-BABYLON.SceneLoader.ImportMesh("", "./glb/", f, scene, meshes=>{
-const root=new BABYLON.TransformNode(f,scene);
-meshes.forEach(m=>m.parent=root);
-
-const box=root.getHierarchyBoundingVectors();
-const size=box.max.subtract(box.min).length();
-const scale=20/size;
-root.scaling.setAll(scale);
-
-root.position.x=(i%3)*spacing;
-root.position.z=Math.floor(i/3)*spacing;
-
-loadedWorlds++;
-});
+GLBS.forEach((name,i)=>{
+  BABYLON.SceneLoader.ImportMeshAsync(
+    null,"/glb/",name,scene
+  ).then(res=>{
+    const root = res.meshes[0];
+    root.position = new BABYLON.Vector3(
+      (i%4)*spacing - 60,
+      0,
+      Math.floor(i/4)*spacing
+    );
+    worlds.push(root);
+  });
 });
 
-/* MOVEMENT */
-const SPEED=0.75;
-let move=BABYLON.Vector3.Zero();
-const dirs={
-forward:new BABYLON.Vector3(0,0,1),
-back:new BABYLON.Vector3(0,0,-1),
-left:new BABYLON.Vector3(-1,0,0),
-right:new BABYLON.Vector3(1,0,0),
-up:new BABYLON.Vector3(0,1,0),
-down:new BABYLON.Vector3(0,-1,0)
-};
-
-document.querySelectorAll(".btn").forEach(b=>{
-b.ontouchstart=()=>move=dirs[b.dataset.m];
-b.ontouchend=()=>move=BABYLON.Vector3.Zero();
+// LOOK = drag anywhere
+let lastX,lastY;
+canvas.addEventListener("pointerdown",e=>{
+  lastX=e.clientX; lastY=e.clientY;
+});
+canvas.addEventListener("pointermove",e=>{
+  if(e.buttons!==1) return;
+  camera.rotation.y += (e.clientX-lastX)*0.002;
+  camera.rotation.x += (e.clientY-lastY)*0.002;
+  lastX=e.clientX; lastY=e.clientY;
 });
 
-/* LOOP */
+// MOVE = arrows only
+const moveState = {};
+document.querySelectorAll(".moveBtn").forEach(b=>{
+  const d=b.dataset.dir;
+  b.addEventListener("pointerdown",()=>moveState[d]=true);
+  b.addEventListener("pointerup",()=>moveState[d]=false);
+  b.addEventListener("pointerleave",()=>moveState[d]=false);
+});
+
 scene.onBeforeRenderObservable.add(()=>{
-if(avatar){
-avatar.position.addInPlace(move.scale(SPEED));
-cam.target=avatar.position;
-}
-
-debug.innerHTML=
-`<b>DEBUG HUD</b><br>
-FPS: ${engine.getFps().toFixed(1)}<br>
-Avatar: ${avatar?avatar.position.toString():"—"}<br>
-Cam α: ${cam.alpha.toFixed(2)} β: ${cam.beta.toFixed(2)}<br>
-Cam r: ${cam.radius.toFixed(1)}<br>
-Move: ${move.toString()}<br>
-Worlds loaded: ${loadedWorlds}/${files.length}<br>
-Time: ${(performance.now()/1000).toFixed(2)}s`;
+  const speed = 0.6;
+  if(moveState.forward) camera.position.z += speed;
+  if(moveState.down) camera.position.z -= speed;
+  if(moveState.left) camera.position.x -= speed;
+  if(moveState.right) camera.position.x += speed;
+  if(moveState.up) camera.position.y += speed;
+  if(moveState.downZ) camera.position.y -= speed;
 });
-
-/* TAP = INTERACT */
-scene.onPointerDown=()=>console.log("INTERACT");
 
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
