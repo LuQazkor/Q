@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Babylon Avatar Test</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Babylon Third Person Camera</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 
   <style>
     html, body {
@@ -11,125 +11,103 @@
       height: 100%;
       margin: 0;
       overflow: hidden;
-      background: #111;
+      background: black;
+      touch-action: none;
     }
-
     canvas {
       width: 100%;
       height: 100%;
       display: block;
-      touch-action: none;
-    }
-
-    #badge {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: black;
-      color: #00ffff;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-family: system-ui, sans-serif;
-      font-size: 14px;
-      z-index: 10;
     }
   </style>
+
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
+  <canvas id="renderCanvas"></canvas>
 
-<div id="badge">Avatar Loader v2</div>
-<canvas id="renderCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    const createScene = async () => {
+      const scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color3(0, 0, 0);
 
-<script>
-console.log("=== BABYLON AVATAR TEST v2 ===");
+      // Light
+      const light = new BABYLON.HemisphericLight(
+        "light",
+        new BABYLON.Vector3(0, 1, 0),
+        scene
+      );
+      light.intensity = 0.9;
 
-const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true);
-const scene = new BABYLON.Scene(engine);
+      // Ground
+      const ground = BABYLON.MeshBuilder.CreateGround(
+        "ground",
+        { width: 50, height: 50 },
+        scene
+      );
+      ground.position.y = 0;
 
-// VERY visible background
-scene.clearColor = new BABYLON.Color4(0.15, 0.15, 0.15, 1);
+      // Camera (third-person)
+      const camera = new BABYLON.ArcRotateCamera(
+        "camera",
+        BABYLON.Tools.ToRadians(180),
+        BABYLON.Tools.ToRadians(65),
+        6,
+        BABYLON.Vector3.Zero(),
+        scene
+      );
 
-// Camera
-const camera = new BABYLON.ArcRotateCamera(
-  "camera",
-  Math.PI / 2,
-  Math.PI / 2.2,
-  4,
-  BABYLON.Vector3.Zero(),
-  scene
-);
-camera.attachControl(canvas, true);
+      camera.lowerRadiusLimit = 3;
+      camera.upperRadiusLimit = 12;
+      camera.attachControl(canvas, true);
+      camera.wheelDeltaPercentage = 0.01;
+      camera.pinchDeltaPercentage = 0.01;
 
-// Light (strong)
-const light = new BABYLON.HemisphericLight(
-  "light",
-  new BABYLON.Vector3(0, 1, 0),
-  scene
-);
-light.intensity = 1.2;
+      // Load avatar
+      const result = await BABYLON.SceneLoader.ImportMeshAsync(
+        "",
+        "./",
+        "avatar.glb", // <-- your GLB here
+        scene
+      );
 
-// Simple ground (NO grid material)
-const ground = BABYLON.MeshBuilder.CreateGround(
-  "ground",
-  { width: 6, height: 6 },
-  scene
-);
-const groundMat = new BABYLON.StandardMaterial("gmat", scene);
-groundMat.diffuseColor = new BABYLON.Color3(0.25, 0.25, 0.25);
-ground.material = groundMat;
+      const avatarRoot = new BABYLON.TransformNode("avatarRoot", scene);
 
-// ==== LOAD AVATAR ====
-const AVATAR_PATH = "/glb/avatar.glb";
-console.log("Loading avatar:", AVATAR_PATH);
+      result.meshes.forEach(m => {
+        if (m.parent === null) {
+          m.parent = avatarRoot;
+        }
+      });
 
-BABYLON.SceneLoader.ImportMeshAsync(
-  null,
-  "",
-  AVATAR_PATH,
-  scene
-).then(result => {
-  console.log("Avatar loaded OK", result);
+      // Normalize avatar scale (THIS is why it was "huge")
+      avatarRoot.scaling.setAll(0.01);
 
-  const root = new BABYLON.TransformNode("avatarRoot", scene);
+      // Position avatar
+      avatarRoot.position.y = 0;
 
-  result.meshes.forEach(m => {
-    if (m !== scene.meshes[0]) {
-      m.parent = root;
-    }
-  });
+      // Camera follows above & behind head
+      const headHeight = 1.6;
 
-  // Normalize size
-  const bounds = root.getHierarchyBoundingVectors();
-  const size = bounds.max.subtract(bounds.min);
-  const maxAxis = Math.max(size.x, size.y, size.z);
-  const scale = 1 / maxAxis;
+      scene.onBeforeRenderObservable.add(() => {
+        camera.target.x = avatarRoot.position.x;
+        camera.target.z = avatarRoot.position.z;
+        camera.target.y = avatarRoot.position.y + headHeight;
+      });
 
-  root.scaling.setAll(scale);
+      return scene;
+    };
 
-  // Center it
-  const center = bounds.min.add(size.scale(0.5));
-  root.position = root.position.subtract(center.scale(scale));
+    createScene().then(scene => {
+      engine.runRenderLoop(() => scene.render());
+    });
 
-  camera.radius = maxAxis * 3;
-  camera.target = BABYLON.Vector3.Zero();
-
-}).catch(err => {
-  console.error("❌ AVATAR LOAD FAILED", err);
-});
-
-// Render
-engine.runRenderLoop(() => {
-  scene.render();
-});
-
-window.addEventListener("resize", () => {
-  engine.resize();
-});
-</script>
-
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
+  </script>
 </body>
 </html>
