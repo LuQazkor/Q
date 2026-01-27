@@ -2,163 +2,171 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Overwatch Viewer</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>GLB Overwatch Grid v22</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
 
 <style>
-html,body{margin:0;padding:0;overflow:hidden;background:#0f2a2a;}
-#renderCanvas{width:100vw;height:100vh;touch-action:none;display:block;}
+html,body{margin:0;padding:0;overflow:hidden;background:#0e2525;}
+#c{width:100vw;height:100vh;touch-action:none;display:block;}
 
-#hud{
-position:fixed;top:12px;left:12px;
-background:rgba(0,0,0,.55);
-color:#dff;font-family:system-ui;
-padding:12px;border-radius:12px;
+#status,#debug{
+position:fixed;left:12px;
+background:rgba(0,0,0,.65);
+color:#e6ffff;font-family:system-ui;
+padding:12px 14px;border-radius:14px;
+font-size:13px;line-height:1.35;
 }
+
+#status{top:12px;}
+#debug{top:120px;min-width:220px;}
 
 #pad{
 position:fixed;bottom:24px;left:50%;
 transform:translateX(-50%);
-width:160px;height:320px;
-border-radius:160px;
+width:180px;height:360px;
+border-radius:180px;
 background:rgba(255,255,255,.08);
 display:grid;
 grid-template-columns:1fr 1fr 1fr;
 grid-template-rows:repeat(5,1fr);
-gap:6px;
-padding:12px;
+gap:8px;padding:14px;
 }
 
 .btn{
-background:rgba(255,255,255,.18);
-border-radius:12px;
+background:rgba(255,255,255,.2);
+border-radius:14px;
 display:flex;align-items:center;justify-content:center;
 font-size:22px;color:white;
 user-select:none;
 }
-
 </style>
 </head>
 
 <body>
-<canvas id="renderCanvas"></canvas>
+<canvas id="c"></canvas>
 
-<div id="hud">
-<b>FINAL HUMAN CONTROL MODEL (LOCKED)</b><br>
-LOOK = drag anywhere<br>
-MOVE = arrows only<br>
-TAP = interact
+<div id="status">
+<b>Status v22</b><br>
+LOOK — drag anywhere<br>
+MOVE — arrows only<br>
+TAP — interact
 </div>
 
+<div id="debug">booting…</div>
+
 <div id="pad">
-<div></div><div class="btn" data-move="up">↑</div><div></div>
-<div class="btn" data-move="left">←</div><div class="btn" data-move="forward">↖</div><div class="btn" data-move="right">→</div>
-<div></div><div class="btn" data-move="backward">↙</div><div></div>
-<div></div><div class="btn" data-move="down">↓</div><div></div>
+<div></div><div class="btn" data-m="up">↑</div><div></div>
+<div class="btn" data-m="left">←</div><div class="btn" data-m="forward">↖</div><div class="btn" data-m="right">→</div>
+<div></div><div class="btn" data-m="back">↙</div><div></div>
+<div></div><div class="btn" data-m="down">↓</div><div></div>
 </div>
 
 <script>
-const canvas=document.getElementById("renderCanvas");
+const canvas=document.getElementById("c");
 const engine=new BABYLON.Engine(canvas,true);
-const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color3(0.06,0.16,0.16);
+const scene=new BABYLON.Scene(scene);
+scene.clearColor=new BABYLON.Color3(.06,.15,.15);
+
+const debug=document.getElementById("debug");
 
 /* CAMERA — OVERWATCH */
-const camera=new BABYLON.ArcRotateCamera(
+const cam=new BABYLON.ArcRotateCamera(
 "cam",
-Math.PI/4,1.1,40,
+Math.PI/4,1.2,90,
 BABYLON.Vector3.Zero(),
 scene
 );
-camera.attachControl(canvas,true);
-camera.panningSensibility=0;
-camera.zoomOnFactor=0;
-camera.wheelDeltaPercentage=0;
-camera.lowerRadiusLimit=10;
-camera.upperRadiusLimit=120;
+cam.attachControl(canvas,true);
+cam.wheelDeltaPercentage=0;
+cam.panningSensibility=0;
+cam.lowerRadiusLimit=30;
+cam.upperRadiusLimit=200;
 
 /* LIGHT */
 new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene);
 
 /* GRID */
-const grid=BABYLON.MeshBuilder.CreateGround("g",{width:200,height:200},scene);
-const gridMat=new BABYLON.GridMaterial("gm",scene);
-gridMat.majorUnitFrequency=10;
-gridMat.minorUnitVisibility=.45;
-grid.material=gridMat;
+const ground=BABYLON.MeshBuilder.CreateGround("g",{width:300,height:300},scene);
+const gm=new BABYLON.GridMaterial("gm",scene);
+gm.majorUnitFrequency=10;
+gm.minorUnitVisibility=.4;
+ground.material=gm;
 
 /* AVATAR */
-let avatarRoot=null;
-BABYLON.SceneLoader.ImportMesh(
-"",
-"./glb/",
-"avatar.glb",
-scene,
-(meshes)=>{
-avatarRoot=new BABYLON.TransformNode("avatar",scene);
-meshes.forEach(m=>m.parent=avatarRoot);
-avatarRoot.scaling.setAll(1);
-avatarRoot.position.y=1;
-camera.target=avatarRoot.position;
-}
-);
+let avatar;
+BABYLON.SceneLoader.ImportMesh("", "./glb/", "avatar.glb", scene, meshes=>{
+avatar=new BABYLON.TransformNode("avatar",scene);
+meshes.forEach(m=>m.parent=avatar);
+avatar.position.set(0,1,0);
+cam.target=avatar.position;
+});
 
 /* WORLDS */
-const worlds=[
-"office.glb",
-"ICU.glb",
-"city_pack_8.glb"
+const files=[
+"office.glb","ICU.glb","city_pack_8.glb",
+"1970_dodge_challenger_rt.glb","sphere.glb"
 ];
-let worldIndex=0;
-let worldRoot=null;
 
-function loadWorld(){
-if(worldRoot){worldRoot.dispose();}
-BABYLON.SceneLoader.ImportMesh(
-"",
-"./glb/",
-worlds[worldIndex],
-scene,
-(meshes)=>{
-worldRoot=new BABYLON.TransformNode("world",scene);
-meshes.forEach(m=>m.parent=worldRoot);
-worldRoot.scaling.setAll(1);
-worldRoot.position.set(0,0,0);
-}
-);
-}
-loadWorld();
+let loadedWorlds=0;
+const spacing=40;
+
+files.forEach((f,i)=>{
+BABYLON.SceneLoader.ImportMesh("", "./glb/", f, scene, meshes=>{
+const root=new BABYLON.TransformNode(f,scene);
+meshes.forEach(m=>m.parent=root);
+
+const box=root.getHierarchyBoundingVectors();
+const size=box.max.subtract(box.min).length();
+const scale=20/size;
+root.scaling.setAll(scale);
+
+root.position.x=(i%3)*spacing;
+root.position.z=Math.floor(i/3)*spacing;
+
+loadedWorlds++;
+});
+});
 
 /* MOVEMENT */
-const speed=0.15;
-const dirMap={
+const SPEED=0.75;
+let move=BABYLON.Vector3.Zero();
+const dirs={
 forward:new BABYLON.Vector3(0,0,1),
-backward:new BABYLON.Vector3(0,0,-1),
+back:new BABYLON.Vector3(0,0,-1),
 left:new BABYLON.Vector3(-1,0,0),
 right:new BABYLON.Vector3(1,0,0),
 up:new BABYLON.Vector3(0,1,0),
 down:new BABYLON.Vector3(0,-1,0)
 };
-let moveVec=BABYLON.Vector3.Zero();
 
 document.querySelectorAll(".btn").forEach(b=>{
-b.ontouchstart=()=>moveVec=dirMap[b.dataset.move];
-b.ontouchend=()=>moveVec=BABYLON.Vector3.Zero();
+b.ontouchstart=()=>move=dirs[b.dataset.m];
+b.ontouchend=()=>move=BABYLON.Vector3.Zero();
 });
 
+/* LOOP */
 scene.onBeforeRenderObservable.add(()=>{
-if(!avatarRoot)return;
-avatarRoot.position.addInPlace(moveVec.scale(speed));
-camera.target=avatarRoot.position;
+if(avatar){
+avatar.position.addInPlace(move.scale(SPEED));
+cam.target=avatar.position;
+}
+
+debug.innerHTML=
+`<b>DEBUG HUD</b><br>
+FPS: ${engine.getFps().toFixed(1)}<br>
+Avatar: ${avatar?avatar.position.toString():"—"}<br>
+Cam α: ${cam.alpha.toFixed(2)} β: ${cam.beta.toFixed(2)}<br>
+Cam r: ${cam.radius.toFixed(1)}<br>
+Move: ${move.toString()}<br>
+Worlds loaded: ${loadedWorlds}/${files.length}<br>
+Time: ${(performance.now()/1000).toFixed(2)}s`;
 });
 
-/* TAP = INTERACT (HOOK) */
-scene.onPointerDown=()=>{
-console.log("INTERACT");
-};
+/* TAP = INTERACT */
+scene.onPointerDown=()=>console.log("INTERACT");
 
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
