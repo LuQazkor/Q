@@ -2,75 +2,50 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Viewer v26.1</title>
+<title>GLB Overwatch v27</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
 
 <style>
 html,body{
-  margin:0;
-  padding:0;
-  overflow:hidden;
-  background:#001f1f;
+  margin:0; padding:0; overflow:hidden;
+  background:#042c2c;
   touch-action:none;
   font-family:system-ui;
 }
-
 #version{
-  position:absolute;
-  top:12px;
-  right:12px;
-  background:#000;
-  color:#0ff;
-  padding:8px 12px;
-  border-radius:999px;
-  font-weight:800;
-  z-index:10;
+  position:absolute; top:12px; right:12px;
+  background:#000; color:#0ff;
+  padding:8px 12px; border-radius:999px;
+  font-weight:800; z-index:10;
 }
-
-#log{
-  position:absolute;
-  top:12px;
-  left:12px;
-  background:rgba(0,0,0,.8);
-  color:#0f0;
-  padding:10px;
-  border-radius:10px;
-  font-size:12px;
-  z-index:10;
+#hud{
+  position:absolute; top:12px; left:12px;
+  background:rgba(0,0,0,.7); color:#fff;
+  padding:12px; border-radius:12px;
+  font-size:13px; z-index:10;
 }
-
 #upload{
-  position:absolute;
-  top:90px;
-  left:12px;
-  background:#0ff;
-  color:#000;
-  padding:8px 12px;
-  border-radius:8px;
+  margin-top:8px;
+  background:#0ff; color:#000;
+  padding:8px 12px; border-radius:8px;
   font-weight:700;
-  cursor:pointer;
-  z-index:10;
 }
-
+#log{
+  position:absolute; bottom:180px; left:12px;
+  color:#0f0; font-size:12px; z-index:10;
+}
 .joy{
-  position:absolute;
-  bottom:24px;
-  width:140px;
-  height:140px;
+  position:absolute; bottom:24px;
+  width:140px; height:140px;
   border-radius:50%;
   background:rgba(255,255,255,.12);
   z-index:10;
 }
-
 #joyL{ left:24px; }
 #joyR{ right:24px; }
-
 .knob{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:60px;
-  height:60px;
+  position:absolute; left:50%; top:50%;
+  width:60px; height:60px;
   margin:-30px;
   border-radius:50%;
   background:rgba(255,255,255,.5);
@@ -79,9 +54,15 @@ html,body{
 </head>
 
 <body>
-<div id="version">v26.1</div>
+<div id="version">v27</div>
+<div id="hud">
+<b>FINAL HUMAN CONTROL MODEL</b><br>
+👁 Drag = look<br>
+🕹 Left = move<br>
+🕹 Right = strafe + lift<br>
+<button id="upload">⬆ Upload GLB</button>
+</div>
 <div id="log">Booting…</div>
-<div id="upload">⬆ Upload GLB</div>
 
 <div id="joyL" class="joy"><div class="knob"></div></div>
 <div id="joyR" class="joy"><div class="knob"></div></div>
@@ -91,40 +72,43 @@ html,body{
 
 <script>
 const logEl=document.getElementById("log");
-const log=m=>{ console.log(m); logEl.textContent=m; };
-log("v26.1 script running");
+const log=m=>{console.log(m);logEl.textContent=m};
 
-/* ENGINE */
 const canvas=document.createElement("canvas");
-canvas.style.position="fixed";
-canvas.style.inset="0";
+canvas.style.position="fixed"; canvas.style.inset="0";
 document.body.appendChild(canvas);
 
 const engine=new BABYLON.Engine(canvas,true);
 const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color4(0,0.3,0.3,1);
+scene.clearColor=new BABYLON.Color4(0.02,0.18,0.18,1);
 
-/* CAMERA + PLAYER */
+/* PLAYER + CAMERA */
 const player=new BABYLON.TransformNode("player",scene);
+player.position.set(0,3,-20);
+
 const camera=new BABYLON.UniversalCamera(
-  "cam",new BABYLON.Vector3(0,3,-10),scene
+  "cam",new BABYLON.Vector3(0,2,-10),scene
 );
 camera.parent=player;
 camera.attachControl(canvas,false);
 scene.activeCamera=camera;
 
 /* LIGHT */
-new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene);
+new BABYLON.HemisphericLight("h",
+  new BABYLON.Vector3(0,1,0),scene);
 
-/* GRID — ALWAYS */
+/* GRID (FORCED VISIBLE) */
 const grid=BABYLON.MeshBuilder.CreateGround(
   "grid",{width:500,height:500},scene
 );
+grid.position.y=0;
 const gm=new BABYLON.StandardMaterial("gm",scene);
 gm.wireframe=true;
 gm.emissiveColor=new BABYLON.Color3(0,1,1);
 grid.material=gm;
-log("Grid visible");
+
+/* AXIS */
+BABYLON.AxesViewer.CreateAxesViewer(scene,5);
 
 /* JOYSTICKS */
 function joy(el){
@@ -147,7 +131,7 @@ const joyL=joy(joyL);
 const joyR=joy(joyR);
 
 /* LOOK */
-let lx=0,ly=0,look=false;
+let look=false,lx=0,ly=0;
 canvas.onpointerdown=e=>{
   if(e.target.closest(".joy")) return;
   look=true; lx=e.clientX; ly=e.clientY;
@@ -160,42 +144,73 @@ canvas.onpointermove=e=>{
 };
 canvas.onpointerup=()=>look=false;
 
+/* NORMALIZE + PLACE */
+let placed=0;
+function normalize(mesh){
+  const box=mesh.getHierarchyBoundingVectors();
+  const size=box.max.subtract(box.min);
+  const max=Math.max(size.x,size.y,size.z);
+  const scale=10/max;
+  mesh.scaling.scaleInPlace(scale);
+  mesh.position=box.min.add(box.max).scale(-0.5*scale);
+}
+
+/* LOAD GLB */
+async function loadGLB(url){
+  log("Loading "+url);
+  const r=await BABYLON.SceneLoader.ImportMeshAsync(
+    null,"",url,scene
+  );
+  const root=r.meshes[0];
+  normalize(root);
+  const angle=placed*0.6;
+  root.position.x=Math.cos(angle)*30;
+  root.position.z=Math.sin(angle)*30;
+  placed++;
+  if(placed===1){
+    player.position.set(
+      root.position.x,5,root.position.z-20
+    );
+  }
+  log("Loaded "+url);
+}
+
 /* UPLOAD */
 upload.onclick=()=>{
   const i=document.createElement("input");
   i.type="file"; i.accept=".glb";
-  i.onchange=async()=>{
-    const f=i.files[0];
-    if(!f) return;
-    log("Loading "+f.name);
-    const url=URL.createObjectURL(f);
-    const r=await BABYLON.SceneLoader.ImportMeshAsync(null,"",url,scene);
-    r.meshes[0].position.set(0,0,20);
-    log("Loaded "+f.name);
-  };
+  i.onchange=()=>loadGLB(
+    URL.createObjectURL(i.files[0])
+  );
   i.click();
 };
+
+/* AUTO LOAD MANIFEST */
+fetch("glb/index.json")
+.then(r=>r.json())
+.then(list=>list.forEach(f=>loadGLB("glb/"+f)))
+.catch(()=>log("No glb/index.json"));
 
 /* LOOP */
 scene.onBeforeRenderObservable.add(()=>{
   const l=joyL(), r=joyR();
-  const sp=0.5;
+  const sp=0.6;
   const f=new BABYLON.Vector3(
     Math.sin(camera.rotation.y),0,
     Math.cos(camera.rotation.y)
   );
-  const right=new BABYLON.Vector3(
+  const rt=new BABYLON.Vector3(
     Math.sin(camera.rotation.y+Math.PI/2),0,
     Math.cos(camera.rotation.y+Math.PI/2)
   );
   player.position.addInPlace(f.scale(-l.y*sp));
-  player.position.addInPlace(right.scale(l.x*sp));
+  player.position.addInPlace(rt.scale(l.x*sp));
   player.position.y+=r.y*sp;
-  player.position.addInPlace(right.scale(r.x*sp));
+  player.position.addInPlace(rt.scale(r.x*sp));
 });
 
 engine.runRenderLoop(()=>scene.render());
-log("Engine running");
+log("v27 ready");
 </script>
 </body>
 </html>
