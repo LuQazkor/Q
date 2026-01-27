@@ -1,151 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Babylon Avatar Loader</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-
+<meta charset="utf-8">
+<title>My Flying GLB World</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
 html, body {
-  width: 100%;
-  height: 100%;
   margin: 0;
   padding: 0;
-  background: #000;
   overflow: hidden;
-}
-
-#renderCanvas {
-  width: 100vw;
-  height: 100vh;
-  display: block;
+  background: #000;
   touch-action: none;
 }
-
-#hud {
+#ui {
   position: fixed;
-  top: 8px;
-  left: 8px;
-  background: rgba(0,0,0,0.8);
-  color: #0f0;
-  font-family: monospace;
-  font-size: 12px;
-  padding: 8px;
+  top: 10px;
+  left: 10px;
   z-index: 10;
-  max-width: 90vw;
-  white-space: pre-wrap;
-}
-
-#badge {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  background: #000;
-  color: #0ff;
-  padding: 6px 10px;
-  border-radius: 14px;
+  color: white;
   font-family: system-ui, sans-serif;
   font-size: 13px;
-  z-index: 10;
+}
+#file { margin-bottom: 6px; }
+
+.joy {
+  position: fixed;
+  bottom: 20px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+}
+#moveJoy { left: 20px; }
+#lookJoy { right: 20px; }
+.stick {
+  position: absolute;
+  left: 40px;
+  top: 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
 }
 </style>
 </head>
-
 <body>
 
-<div id="hud">booting…</div>
-<div id="badge">Avatar Loader v4</div>
-<canvas id="renderCanvas"></canvas>
+<div id="ui">
+  <input id="file" type="file" multiple accept=".glb">
+  <div>Fly your avatar between GLBs</div>
+</div>
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+<div id="moveJoy" class="joy"><div class="stick"></div></div>
+<div id="lookJoy" class="joy"><div class="stick"></div></div>
 
-<script>
-const hud = document.getElementById("hud");
-function log(msg) {
-  console.log(msg);
-  hud.textContent += "\n" + msg;
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/DRACOLoader.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0f14);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 10000);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+document.body.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(5,10,5);
+scene.add(sun);
+
+// Avatar
+const avatar = new THREE.Group();
+const body = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.3, 1.2, 4, 8),
+  new THREE.MeshStandardMaterial({ color: 0x66ccff })
+);
+body.position.y = 0.6;
+avatar.add(body);
+scene.add(avatar);
+
+camera.position.set(0, 0.8, 0);
+avatar.add(camera);
+
+// World + loader
+const world = new THREE.Group();
+scene.add(world);
+
+const loader = new GLTFLoader();
+const draco = new DRACOLoader();
+draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/libs/draco/');
+loader.setDRACOLoader(draco);
+
+function frameFirst(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3()).length();
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.sub(center);
+  avatar.position.set(0, size*0.2, size*1.3);
 }
 
-log("JS alive");
-
-const canvas = document.getElementById("renderCanvas");
-
-const engine = new BABYLON.Engine(canvas, true, {
-  preserveDrawingBuffer: true,
-  stencil: true
-});
-
-log("Engine created");
-
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
-log("Scene created");
-
-// Camera (static, guaranteed visible)
-const camera = new BABYLON.ArcRotateCamera(
-  "cam",
-  Math.PI / 2,
-  Math.PI / 2,
-  4,
-  BABYLON.Vector3.Zero(),
-  scene
-);
-camera.attachControl(canvas, true);
-log("Camera ready");
-
-// Light
-new BABYLON.HemisphericLight(
-  "light",
-  new BABYLON.Vector3(0, 1, 0),
-  scene
-);
-log("Light ready");
-
-// TEMP DEBUG MESH (PROVES RENDERING)
-const box = BABYLON.MeshBuilder.CreateBox("debugBox", { size: 1 }, scene);
-box.position.y = 0.5;
-log("Debug box created");
-
-// Load avatar
-const AVATAR = "glb/avatar.glb";
-log("Loading " + AVATAR);
-
-BABYLON.SceneLoader.ImportMeshAsync(
-  null,
-  "",
-  AVATAR,
-  scene
-).then(res => {
-  log("Avatar loaded: meshes=" + res.meshes.length);
-
-  res.meshes.forEach(m => {
-    if (m.name !== "__root__") {
-      m.position.y += 0.01;
-    }
+// Upload GLBs
+document.getElementById('file').addEventListener('change', e => {
+  [...e.target.files].forEach(file => {
+    const url = URL.createObjectURL(file);
+    loader.load(url, gltf => {
+      const model = gltf.scene;
+      model.position.x = world.children.length * 12;
+      world.add(model);
+      if (world.children.length === 1) frameFirst(model);
+    });
   });
-
-  // Remove debug box once avatar loads
-  box.dispose();
-  log("Debug box removed");
-
-}).catch(err => {
-  log("GLB ERROR");
-  log(err.message || err);
 });
 
-// Render loop
-engine.runRenderLoop(() => {
-  scene.render();
-});
+// --- Input ---
+let pitch = 0, yaw = 0;
+let move = { x:0, y:0 };
+let look = { x:0, y:0 };
 
-// Resize
-window.addEventListener("resize", () => {
-  engine.resize();
-});
+function setupJoy(el, out) {
+  const stick = el.firstChild;
+  let active = false, sx=0, sy=0;
+  el.addEventListener('pointerdown', e => {
+    active = true;
+    sx = e.clientX;
+    sy = e.clientY;
+  });
+  addEventListener('pointerup', () => {
+    active = false;
+    out.x = out.y = 0;
+    stick.style.left = stick.style.top = '40px';
+  });
+  addEventListener('pointermove', e => {
+    if (!active) return;
+    const dx = Math.max(-40, Math.min(40, e.clientX - sx));
+    const dy = Math.max(-40, Math.min(40, e.clientY - sy));
+    stick.style.left = 40 + dx + 'px';
+    stick.style.top = 40 + dy + 'px';
+    out.x = dx / 40;
+    out.y = dy / 40;
+  });
+}
 
-log("Render loop started");
+setupJoy(document.getElementById('moveJoy'), move);
+setupJoy(document.getElementById('lookJoy'), look);
+
+// Desktop keys
+const keys = {};
+addEventListener('keydown', e => keys[e.code]=true);
+addEventListener('keyup', e => keys[e.code]=false);
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  yaw   -= look.x * 0.04;
+  pitch -= look.y * 0.04;
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  avatar.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  const speed = 0.12;
+  const forward = new THREE.Vector3(0,0,-1).applyQuaternion(avatar.quaternion);
+  const right = new THREE.Vector3(1,0,0).applyQuaternion(avatar.quaternion);
+
+  avatar.position.addScaledVector(forward, speed * (-move.y + (keys.KeyW?1:0) - (keys.KeyS?1:0)));
+  avatar.position.addScaledVector(right, speed * (move.x + (keys.KeyD?1:0) - (keys.KeyA?1:0)));
+  if (keys.KeyQ) avatar.position.y -= speed;
+  if (keys.KeyE) avatar.position.y += speed;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
 </script>
-
 </body>
 </html>
