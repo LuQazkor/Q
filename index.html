@@ -1,135 +1,238 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Babylon Flying Avatar World</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Universal GLB Field – v22</title>
 <style>
 html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    overflow: hidden;
-    background: black;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0b2a2a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont;
 }
-#ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 10;
-    color: #0f0;
-    font-family: monospace;
+
+#hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: rgba(0,0,0,0.65);
+  color: #dff;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  max-width: 90vw;
+  z-index: 10;
+}
+
+#hud b { color: #9ff; }
+
+#fileBtn {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #0aa;
+  color: #022;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+}
+
+#fileInput {
+  display: none;
+}
+
+#movePad {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: 140px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 70px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  z-index: 5;
+}
+
+.moveBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.moveBtn:active {
+  background: rgba(255,255,255,0.5);
 }
 </style>
 </head>
 
 <body>
-<div id="ui">
-    <button id="addWorld">Add GLB</button><br>
-    <button id="setAvatar">Set Avatar</button><br>
-    WASD move · QE fly · Drag look
+
+<div id="hud">
+  <b>Universal GLB Field</b> v22<br/>
+  Avatar: <span id="avatarStatus">OK</span><br/>
+  Worlds loaded: <span id="worldCount">0</span><br/>
+  <div id="fileBtn">Add GLBs</div>
 </div>
 
-<canvas id="renderCanvas"></canvas>
+<input id="fileInput" type="file" multiple accept=".glb"/>
+
+<div id="movePad">
+  <div class="moveBtn" data-move="left">←</div>
+  <div class="moveBtn" data-move="forward">↑</div>
+  <div class="moveBtn" data-move="right">→</div>
+  <div class="moveBtn" data-move="down">↓</div>
+  <div class="moveBtn" data-move="back">↓↓</div>
+  <div class="moveBtn" data-move="up">↑↑</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <script>
-const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true);
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0,0,0,1);
+/* ---------------- CORE SCENE ---------------- */
 
-new BABYLON.HemisphericLight("h", new BABYLON.Vector3(0,1,0), scene);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b2a2a);
 
-const camera = new BABYLON.UniversalCamera(
-    "cam",
-    new BABYLON.Vector3(0,1.6,-4),
-    scene
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 80, 80);
+camera.lookAt(0,0,0);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------------- LIGHT ---------------- */
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const d = new THREE.DirectionalLight(0xffffff, 0.6);
+d.position.set(50,100,50);
+scene.add(d);
+
+/* ---------------- AVATAR ---------------- */
+
+const avatar = new THREE.Mesh(
+  new THREE.CapsuleGeometry(1,3,4,8),
+  new THREE.MeshStandardMaterial({ color: 0x66ccff })
 );
-camera.attachControl(canvas, true);
-camera.speed = 0.5;
-camera.angularSensibility = 3000;
-camera.keysUp = [87];
-camera.keysDown = [83];
-camera.keysLeft = [65];
-camera.keysRight = [68];
-camera.keysUpward = [69];
-camera.keysDownward = [81];
+avatar.position.y = 3;
+scene.add(avatar);
 
-let avatarRoot = null;
+/* ---------------- CONTROLS ---------------- */
 
-function normalizeMeshes(meshes) {
-    let min = new BABYLON.Vector3(Infinity,Infinity,Infinity);
-    let max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
+let moveState = {x:0,y:0,z:0};
+const SPEED = 0.6;
 
-    meshes.forEach(m=>{
-        if (!m.getBoundingInfo) return;
-        const b = m.getBoundingInfo().boundingBox;
-        min.minimizeInPlace(b.minimumWorld);
-        max.maximizeInPlace(b.maximumWorld);
-    });
+document.querySelectorAll('.moveBtn').forEach(btn=>{
+  btn.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    setMove(btn.dataset.move, 1);
+  });
+  btn.addEventListener('touchend', e=>{
+    e.preventDefault();
+    setMove(btn.dataset.move, 0);
+  });
+});
 
-    const size = max.subtract(min).length();
-    const center = min.add(max).scale(0.5);
-
-    meshes.forEach(m=>{
-        m.position.subtractInPlace(center);
-        m.scaling.scaleInPlace(1 / size);
-    });
+function setMove(dir,val){
+  if(dir==="left") moveState.x = -val;
+  if(dir==="right") moveState.x = val;
+  if(dir==="forward") moveState.z = -val;
+  if(dir==="back") moveState.z = val;
+  if(dir==="up") moveState.y = val;
+  if(dir==="down") moveState.y = -val;
 }
 
-const filesInput = new BABYLON.FilesInput(
-    engine,
-    scene,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    false
-);
+/* LOOK — drag anywhere */
+let looking=false, lastX=0,lastY=0;
+window.addEventListener('touchstart',e=>{
+  looking=true;
+  lastX=e.touches[0].clientX;
+  lastY=e.touches[0].clientY;
+});
+window.addEventListener('touchmove',e=>{
+  if(!looking) return;
+  const dx=e.touches[0].clientX-lastX;
+  const dy=e.touches[0].clientY-lastY;
+  avatar.rotation.y -= dx*0.005;
+  camera.rotation.x -= dy*0.003;
+  camera.rotation.x=Math.max(-1.2,Math.min(1.2,camera.rotation.x));
+  lastX=e.touches[0].clientX;
+  lastY=e.touches[0].clientY;
+});
+window.addEventListener('touchend',()=>looking=false);
 
-document.getElementById("addWorld").onclick = () => {
-    filesInput.loadFiles({
-        accept: ".glb,.gltf",
-        onLoaded: (sceneFile, data, responseURL) => {
-            BABYLON.SceneLoader.Append(
-                "",
-                sceneFile.name,
-                scene
-            );
-        }
-    });
+/* ---------------- GLB LOADING ---------------- */
+
+const loader = new THREE.GLTFLoader();
+let gridIndex = 0;
+const GRID_SPACING = 30;
+
+document.getElementById('fileBtn').onclick = ()=>fileInput.click();
+
+fileInput.onchange = e=>{
+  [...e.target.files].forEach(loadGLB);
 };
 
-document.getElementById("setAvatar").onclick = () => {
-    filesInput.loadFiles({
-        accept: ".glb,.gltf",
-        onLoaded: (sceneFile) => {
-            if (avatarRoot) avatarRoot.dispose();
-            BABYLON.SceneLoader.ImportMesh(
-                "",
-                "",
-                sceneFile.name,
-                scene,
-                meshes => {
-                    avatarRoot = new BABYLON.TransformNode("avatar", scene);
-                    meshes.forEach(m => m.parent = avatarRoot);
-                    normalizeMeshes(meshes);
-                    camera.parent = avatarRoot;
-                    camera.position = new BABYLON.Vector3(0,1.6,-4);
-                }
-            );
-        }
-    });
-};
+function loadGLB(file){
+  const url = URL.createObjectURL(file);
+  loader.load(url, gltf=>{
+    const obj = gltf.scene;
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3()).length();
+    const scale = 12 / size;
+    obj.scale.setScalar(scale);
 
-engine.runRenderLoop(() => scene.render());
-window.addEventListener("resize", () => engine.resize());
+    const x = (gridIndex % 5) * GRID_SPACING;
+    const z = Math.floor(gridIndex / 5) * GRID_SPACING;
+    obj.position.set(x,0,z);
+
+    scene.add(obj);
+    gridIndex++;
+    document.getElementById('worldCount').innerText = gridIndex;
+  });
+}
+
+/* ---------------- LOOP ---------------- */
+
+function animate(){
+  requestAnimationFrame(animate);
+  avatar.position.x += moveState.x * SPEED;
+  avatar.position.y += moveState.y * SPEED;
+  avatar.position.z += moveState.z * SPEED;
+
+  camera.position.lerp(
+    new THREE.Vector3(
+      avatar.position.x,
+      avatar.position.y+40,
+      avatar.position.z+60
+    ),
+    0.1
+  );
+  camera.lookAt(avatar.position);
+  renderer.render(scene,camera);
+}
+animate();
 </script>
+
 </body>
 </html>
