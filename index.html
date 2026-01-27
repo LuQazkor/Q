@@ -1,280 +1,586 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Overwatch Viewer v23-mobile</title>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
-
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>GLB World v12</title>
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#0b3a3a;
-  touch-action:none;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont;
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;-webkit-text-size-adjust:100%}
+#c{width:100vw;height:100vh;display:block;background:#111;touch-action:none}
+
+#version-badge{
+  position:fixed;top:10px;right:10px;z-index:10000;
+  padding:6px 10px;font:12px system-ui;color:#fff;background:rgba(0,0,0,.85);
+  border:1px solid rgba(255,255,255,.30);border-radius:999px;pointer-events:none
 }
 
 #hud{
-  position:absolute;
-  top:12px;
-  left:12px;
-  background:rgba(0,0,0,.6);
-  color:#fff;
-  padding:12px 14px;
-  border-radius:14px;
-  font-size:14px;
-  z-index:10;
+  position:fixed;top:10px;left:10px;z-index:9999;max-width:calc(100vw - 170px);
+  font:13px system-ui;color:#fff;background:rgba(0,0,0,.72);
+  border:1px solid rgba(255,255,255,.14);padding:10px;border-radius:12px
+}
+#hud .small{opacity:.92;font-size:12px;margin-top:6px;white-space:pre-wrap}
+#hud .row{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+#hud button{
+  border:0;border-radius:999px;padding:8px 10px;background:rgba(255,255,255,.12);
+  color:#fff;font:13px system-ui;border:1px solid rgba(255,255,255,.18)
+}
+#hud button:active{transform:scale(.97)}
+
+#minimapWrap{
+  position:fixed;top:10px;right:10px;z-index:9999;
+  width:148px;height:148px;border-radius:14px;
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.18);
+  overflow:hidden;backdrop-filter: blur(6px)
+}
+#minimap{width:148px;height:148px;display:block;touch-action:none}
+#minimapLabel{
+  position:absolute;left:8px;bottom:6px;
+  font:11px system-ui;color:rgba(255,255,255,.9);
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+  pointer-events:none
 }
 
-#version{
-  position:absolute;
-  top:12px;
-  right:12px;
-  background:#000;
-  color:#6ff;
-  padding:6px 10px;
-  border-radius:999px;
-  font-size:12px;
-  z-index:10;
+#mobile{position:fixed;left:0;right:0;bottom:0;z-index:9998;pointer-events:none;display:block}
+.pad{
+  pointer-events:auto;position:absolute;bottom:14px;width:150px;height:150px;border-radius:999px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);backdrop-filter: blur(6px)
 }
-
-.joy{
-  position:absolute;
-  bottom:24px;
-  width:140px;
-  height:140px;
-  border-radius:50%;
-  background:rgba(255,255,255,.08);
-  z-index:10;
+#leftPad{left:14px}
+#rightPad{right:14px;width:170px;height:170px}
+.stick{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.22)
 }
-
-#joyL{ left:24px; }
-#joyR{ right:24px; }
-
-.knob{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:60px;
-  height:60px;
-  margin:-30px;
-  border-radius:50%;
-  background:rgba(255,255,255,.35);
+#btns{
+  pointer-events:auto;position:absolute;left:50%;transform:translateX(-50%);bottom:14px;
+  display:flex;gap:8px;flex-wrap:wrap;justify-content:center
 }
+#btns button{
+  border:0;border-radius:999px;padding:10px 12px;background:rgba(0,0,0,.72);
+  color:#fff;font:13px system-ui;border:1px solid rgba(255,255,255,.16)
+}
+#btns button:active{transform:scale(.97)}
 </style>
 </head>
-
 <body>
-<div id="hud">
-<b>FINAL HUMAN CONTROL MODEL</b><br/>
-👁 Look: 1-finger drag<br/>
-🕹 Move: dual joysticks<br/>
-🛰 Double-tap: camera mode
-</div>
-<div id="version">v23-mobile</div>
+<div id="version-badge">v12</div>
 
-<div id="joyL" class="joy"><div class="knob"></div></div>
-<div id="joyR" class="joy"><div class="knob"></div></div>
+<div id="hud">
+  <div><b>Status</b> v12 (FIXED centers + ALWAYS beacons)</div>
+  <div class="row">
+    <button id="prev">Prev</button>
+    <button id="next">Next</button>
+    <button id="focus">Focus</button>
+    <button id="reset">Reset</button>
+    <button id="beacons">Beacons: ON</button>
+  </div>
+  <div class="small" id="msg">Booting…</div>
+</div>
+
+<div id="minimapWrap">
+  <canvas id="minimap" width="148" height="148"></canvas>
+  <div id="minimapLabel">map</div>
+</div>
+
+<div id="mobile">
+  <div id="leftPad" class="pad"><div id="leftStick" class="stick"></div></div>
+  <div id="rightPad" class="pad"><div id="rightStick" class="stick"></div></div>
+  <div id="btns">
+    <button id="bUp">Up</button>
+    <button id="bDown">Down</button>
+    <button id="bSprint">Sprint</button>
+    <button id="bFocus">Focus</button>
+    <button id="bReset">Reset</button>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
 <script>
-/* ================= ENGINE ================= */
-const canvas=document.createElement("canvas");
-canvas.style.position="fixed";
-canvas.style.top="0";
-canvas.style.left="0";
-canvas.style.width="100vw";
-canvas.style.height="100vh";
-document.body.appendChild(canvas);
+const msgEl = document.getElementById("msg");
+const say = (t)=>msgEl.textContent = t;
 
-const engine=new BABYLON.Engine(canvas,true);
-engine.resize();
+const canvas = document.getElementById("c");
+if(!BABYLON.Engine.isSupported()){ say("❌ WebGL NOT supported/enabled."); throw new Error("WebGL not supported"); }
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
 
-const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color4(0.05,0.2,0.2,1);
+// lights
+new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene).intensity = 1.25;
+const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.25), scene);
+sun.position = new BABYLON.Vector3(100,200,100);
+sun.intensity = 1.9;
 
-/* ================= STATE ================= */
-const state={
-  speed:0.8,
-  vert:0.6,
-  look:0.002,
-  mode:"free" // free | follow | orbit
+// grid + proof cube
+const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:1400, height:1400}, scene);
+const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene);
+gridMat.wireframe = true;
+gridMat.emissiveColor = new BABYLON.Color3(0.2,0.9,1.0);
+gridMat.diffuseColor = new BABYLON.Color3(0,0,0);
+grid.material = gridMat;
+
+const proof = BABYLON.MeshBuilder.CreateBox("PROOF", {size:8}, scene);
+proof.position = new BABYLON.Vector3(0,5,25);
+const proofMat = new BABYLON.StandardMaterial("PM", scene);
+proofMat.emissiveColor = new BABYLON.Color3(1,0.2,0.2);
+proof.material = proofMat;
+
+// follow camera (NO drag look; right stick controls look)
+const follow = new BABYLON.FollowCamera("follow", new BABYLON.Vector3(0, 3, -12), scene);
+follow.radius = 12;
+follow.heightOffset = 2.8;
+follow.rotationOffset = 180;
+follow.cameraAcceleration = 0.18;
+follow.maxCameraSpeed = 90;
+follow.lowerRadiusLimit = 2.5;
+follow.upperRadiusLimit = 220;
+scene.activeCamera = follow;
+
+// helpers
+function getOwnerRepo(){
+  const owner = location.hostname.split(".")[0];
+  const parts = location.pathname.split("/").filter(Boolean);
+  const repo = parts.length ? parts[0] : (owner + ".github.io");
+  return { owner, repo };
+}
+async function listGlbs(owner, repo){
+  const api = `https://api.github.com/repos/${owner}/${repo}/contents/glb`;
+  const r = await fetch(api, { headers:{ "Accept":"application/vnd.github+json" }});
+  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Ensure /glb exists and is public.`);
+  const items = await r.json();
+  return items
+    .filter(x=>x && x.type==="file" && /\.glb$/i.test(x.name))
+    .map(x=>({ name:x.name, url:x.download_url }))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+}
+function computeBounds(meshes){
+  let min = new BABYLON.Vector3(+Infinity,+Infinity,+Infinity);
+  let max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
+  let ok = false;
+  for(const m of meshes){
+    if(!m.getTotalVertices || m.getTotalVertices()<=0) continue;
+    m.computeWorldMatrix(true);
+    const bi = m.getBoundingInfo();
+    if(!bi) continue;
+    min = BABYLON.Vector3.Minimize(min, bi.boundingBox.minimumWorld);
+    max = BABYLON.Vector3.Maximize(max, bi.boundingBox.maximumWorld);
+    ok = true;
+  }
+  const center = ok ? min.add(max).scale(0.5) : BABYLON.Vector3.Zero();
+  const diag = ok ? BABYLON.Vector3.Distance(min,max) : 0;
+  const size = ok ? max.subtract(min) : BABYLON.Vector3.Zero();
+  return {ok,min,max,center,diag,size};
+}
+function forceVisible(mesh){
+  if(mesh.material){
+    mesh.material.backFaceCulling = false;
+    if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.25) mesh.material.alpha = 1.0;
+  }else{
+    const m = new BABYLON.StandardMaterial("MAT_"+mesh.name, scene);
+    m.backFaceCulling = false;
+    mesh.material = m;
+  }
+  mesh.isVisible = true;
+  mesh.visibility = 1;
+  mesh.alwaysSelectAsActiveMesh = true;
+}
+function avatarForceVisible(mesh){
+  if(mesh.material){
+    mesh.material.backFaceCulling = false;
+    if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.5) mesh.material.alpha = 1.0;
+    try{ mesh.material.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8); }catch(_){}
+  } else {
+    const m = new BABYLON.StandardMaterial("AV_MAT_"+mesh.name, scene);
+    m.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8);
+    m.backFaceCulling = false;
+    mesh.material = m;
+  }
+  mesh.isVisible = true;
+  mesh.visibility = 1;
+  mesh.alwaysSelectAsActiveMesh = true;
+}
+function scaleAvatarToHuman(root){
+  const meshes = root.getChildMeshes(false);
+  const b = computeBounds(meshes);
+  if(!b.ok) return;
+  const height = Math.max(0.0001, b.size.y);
+  const TARGET = 1.75;
+  let s = TARGET / height;
+  s = Math.max(0.001, Math.min(200, s));
+  root.scaling = root.scaling.scale(s);
+  // floor to y=0
+  const b2 = computeBounds(meshes);
+  if(b2.ok) root.position.y -= b2.min.y;
+}
+
+// worlds
+const worlds = []; // {name,root,diag,pos,localCenter,beacon}
+let worldIndex = 0;
+let showBeacons = true;
+
+function makeBeacon(){
+  const b = BABYLON.MeshBuilder.CreateSphere("beacon", {diameter:6}, scene);
+  const m = new BABYLON.StandardMaterial("beaconMat", scene);
+  m.emissiveColor = new BABYLON.Color3(0,1,1);
+  m.disableLighting = true;
+  b.material = m;
+  b.isPickable = false;
+  return b;
+}
+
+function layoutWorlds(){
+  let x = 0;
+  const GAP = 55;
+  for(const w of worlds){
+    const half = Math.max(18, Math.min(140, w.diag * 0.55));
+    x += half + GAP;
+    w.pos = new BABYLON.Vector3(x, 0, 0);
+
+    if(w.root) w.root.position = w.pos.clone();
+
+    // IMPORTANT: world center in WORLD SPACE = pos + localCenter
+    const centerWorld = w.pos.add(w.localCenter || BABYLON.Vector3.Zero());
+    if(w.beacon) w.beacon.position = centerWorld.clone();
+
+    x += half;
+  }
+}
+
+let avatar = null; // {root,yaw,pitch}
+let avatarLoaded = false;
+
+function currentTarget(){
+  return (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
+}
+
+function focusWorld(i){
+  if(!worlds.length) return;
+  worldIndex = (i + worlds.length) % worlds.length;
+  const w = worlds[worldIndex];
+
+  const centerWorld = (w.pos || BABYLON.Vector3.Zero()).add(w.localCenter || BABYLON.Vector3.Zero());
+  const node = currentTarget();
+  node.position = centerWorld.clone();
+  node.position.y = Math.max(0, node.position.y);
+
+  follow.lockedTarget = node;
+
+  say(`World: ${w.name} (${worldIndex+1}/${worlds.length})
+Diag: ${Math.round(w.diag)}
+Tap minimap dot to teleport.`);
+}
+
+document.getElementById("next").onclick = ()=>focusWorld(worldIndex+1);
+document.getElementById("prev").onclick = ()=>focusWorld(worldIndex-1);
+document.getElementById("focus").onclick = ()=>focusWorld(worldIndex);
+document.getElementById("reset").onclick = ()=>{
+  if(avatarLoaded && avatar){
+    avatar.yaw = 0;
+    avatar.pitch = 0;
+    avatar.root.rotationQuaternion = BABYLON.Quaternion.Identity();
+  }
+  focusWorld(worldIndex);
+  say("Reset");
 };
+document.getElementById("beacons").onclick = ()=>{
+  showBeacons = !showBeacons;
+  for(const w of worlds){ if(w.beacon) w.beacon.setEnabled(showBeacons); }
+  document.getElementById("beacons").textContent = "Beacons: " + (showBeacons ? "ON":"OFF");
+};
+document.getElementById("bFocus").onclick = ()=>focusWorld(worldIndex);
+document.getElementById("bReset").onclick = ()=>document.getElementById("reset").click();
 
-const BASE_FOV=0.8;
-let targetFov=BASE_FOV;
+// Mobile sticks
+let rawMove = {x:0,y:0};
+let rawLook = {x:0,y:0};
+let upHeld=false, downHeld=false, sprintHeld=false;
 
-/* ================= CAMERA ================= */
-const camera=new BABYLON.UniversalCamera(
-  "cam",
-  new BABYLON.Vector3(0,20,-60),
-  scene
-);
-scene.activeCamera=camera;
-camera.attachControl(canvas,false);
-camera.speed=0;
-camera.fov=BASE_FOV;
-
-/* ================= LIGHT ================= */
-new BABYLON.HemisphericLight(
-  "light",
-  new BABYLON.Vector3(0,1,0),
-  scene
-);
-
-/* ================= GRID ================= */
-const grid=BABYLON.MeshBuilder.CreateGround(
-  "grid",
-  {width:500,height:500},
-  scene
-);
-const gm=new BABYLON.StandardMaterial("gm",scene);
-gm.wireframe=true;
-gm.emissiveColor=new BABYLON.Color3(0,1,1);
-grid.material=gm;
-
-/* ================= LOAD URL ASSETS ================= */
-const params=new URLSearchParams(location.search);
-const avatarURL=params.get("avatar");
-const worldURLs=params.getAll("world");
-
-let target=null;
-
-if(avatarURL){
-  BABYLON.SceneLoader.ImportMeshAsync(null,"",avatarURL,scene)
-  .then(res=>{
-    target=res.meshes.find(m=>!m.parent)||res.meshes[0];
+function deadzoneCurve(v, dz=0.10, expo=1.55){
+  const a = Math.abs(v);
+  if(a < dz) return 0;
+  const t = (a - dz) / (1 - dz);
+  const curved = Math.pow(t, expo);
+  return Math.sign(v) * curved;
+}
+function setupPad(padId, stickId, onMove){
+  const pad = document.getElementById(padId);
+  const stick = document.getElementById(stickId);
+  const max = 60;
+  let active=false, pid=null;
+  const setStick=(dx,dy)=>{ stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; };
+  const end=()=>{ active=false; pid=null; setStick(0,0); onMove(0,0); };
+  pad.addEventListener("pointerdown",(e)=>{ active=true; pid=e.pointerId; pad.setPointerCapture(pid); });
+  pad.addEventListener("pointermove",(e)=>{
+    if(!active || e.pointerId!==pid) return;
+    const b = pad.getBoundingClientRect();
+    const cx = b.left + b.width/2, cy = b.top + b.height/2;
+    let dx = e.clientX - cx, dy = e.clientY - cy;
+    const len = Math.hypot(dx,dy);
+    if(len>max){ dx=dx/len*max; dy=dy/len*max; }
+    setStick(dx,dy);
+    onMove(dx/max, dy/max);
   });
+  pad.addEventListener("pointerup", end);
+  pad.addEventListener("pointercancel", end);
 }
+setupPad("leftPad","leftStick",(nx,ny)=>{ rawMove.x=nx; rawMove.y=-ny; });
+setupPad("rightPad","rightStick",(nx,ny)=>{ rawLook.x=nx; rawLook.y=ny; });
 
-worldURLs.forEach((url,i)=>{
-  BABYLON.SceneLoader.ImportMeshAsync(null,"",url,scene)
-  .then(res=>{
-    const root=res.meshes.find(m=>!m.parent)||res.meshes[0];
-    root.position.set(
-      (i%4)*50-75,
-      0,
-      Math.floor(i/4)*50
-    );
-  });
-});
-
-/* ================= LOOK ================= */
-let lx=0,ly=0,looking=false;
-const PITCH_LIMIT=Math.PI/2.2;
-
-canvas.addEventListener("pointerdown",e=>{
-  if(e.target.closest(".joy")) return;
-  looking=true;
-  lx=e.clientX;
-  ly=e.clientY;
-});
-
-canvas.addEventListener("pointermove",e=>{
-  if(!looking) return;
-  camera.rotation.y+=(e.clientX-lx)*state.look;
-  camera.rotation.x+=(e.clientY-ly)*state.look;
-  camera.rotation.x=Math.max(
-    -PITCH_LIMIT,
-    Math.min(PITCH_LIMIT,camera.rotation.x)
-  );
-  lx=e.clientX;
-  ly=e.clientY;
-});
-
-addEventListener("pointerup",()=>looking=false);
-
-/* ================= JOYSTICKS ================= */
-function makeJoy(el){
-  const knob=el.querySelector(".knob");
-  let x=0,y=0,active=false;
-
-  el.onpointerdown=e=>{
-    active=true;
-    el.setPointerCapture(e.pointerId);
-  };
-
-  el.onpointermove=e=>{
-    if(!active) return;
-    const r=el.getBoundingClientRect();
-    x=(e.clientX-(r.left+r.width/2))/(r.width/2);
-    y=(e.clientY-(r.top+r.height/2))/(r.height/2);
-    x=Math.max(-1,Math.min(1,x));
-    y=Math.max(-1,Math.min(1,y));
-    knob.style.transform=`translate(${x*40}px,${y*40}px)`;
-  };
-
-  el.onpointerup=()=>{
-    active=false;
-    x=y=0;
-    knob.style.transform="";
-  };
-
-  return()=>({x,y});
+function hold(btnId, setter){
+  const b=document.getElementById(btnId);
+  const on=()=>setter(true), off=()=>setter(false);
+  b.addEventListener("pointerdown", on);
+  b.addEventListener("pointerup", off);
+  b.addEventListener("pointercancel", off);
+  b.addEventListener("pointerleave", off);
 }
+hold("bUp", v=>upHeld=v);
+hold("bDown", v=>downHeld=v);
+hold("bSprint", v=>sprintHeld=v);
 
-const joyL=makeJoy(document.getElementById("joyL"));
-const joyR=makeJoy(document.getElementById("joyR"));
+// Desktop keys
+const keys = new Set();
+window.addEventListener("keydown", e=>keys.add(e.code));
+window.addEventListener("keyup", e=>keys.delete(e.code));
 
-/* ================= HELPERS ================= */
-function dirs(){
-  const y=camera.rotation.y;
-  return{
-    f:new BABYLON.Vector3(Math.sin(y),0,Math.cos(y)),
-    r:new BABYLON.Vector3(Math.sin(y+Math.PI/2),0,Math.cos(y+Math.PI/2))
-  };
-}
-
-/* ================= CAMERA MODES ================= */
-function updateCameraMode(){
-  if(!target) return;
-  if(state.mode==="follow"){
-    const off=new BABYLON.Vector3(0,12,-25);
-    off.rotateByQuaternionToRef(
-      BABYLON.Quaternion.FromEulerAngles(0,camera.rotation.y,0),
-      off
-    );
-    camera.position.copyFrom(target.position.add(off));
-    camera.setTarget(target.position);
+// Pinch + wheel zoom ONLY (no drag look)
+let touches = new Map();
+function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+canvas.addEventListener("pointerdown",(e)=>{ canvas.setPointerCapture(e.pointerId); touches.set(e.pointerId,{x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY}); }, {passive:false});
+canvas.addEventListener("pointermove",(e)=>{
+  const t=touches.get(e.pointerId); if(!t) return;
+  t.px=t.x; t.py=t.y; t.x=e.clientX; t.y=e.clientY;
+  const arr=[...touches.values()];
+  if(arr.length>=2){
+    const a=arr[0], b=arr[1];
+    const prevD=dist({x:a.px,y:a.py},{x:b.px,y:b.py});
+    const d=dist(a,b);
+    const delta=d-prevD;
+    follow.radius = Math.max(2.5, Math.min(220, follow.radius - delta*0.040));
+    e.preventDefault();
   }
-  if(state.mode==="orbit"){
-    camera.setTarget(target.position);
-  }
-}
+},{passive:false});
+canvas.addEventListener("pointerup",(e)=>touches.delete(e.pointerId),{passive:false});
+canvas.addEventListener("pointercancel",(e)=>touches.delete(e.pointerId),{passive:false});
+canvas.addEventListener("wheel",(e)=>{
+  follow.radius = Math.max(2.5, Math.min(220, follow.radius + e.deltaY*0.01));
+  e.preventDefault();
+},{passive:false});
 
-addEventListener("dblclick",()=>{
-  state.mode=
-    state.mode==="free"?"follow":
-    state.mode==="follow"?"orbit":"free";
+// MINIMAP
+const mapCanvas = document.getElementById("minimap");
+const mapCtx = mapCanvas.getContext("2d");
+const mapLabel = document.getElementById("minimapLabel");
+
+function mapWorldToMini(p, bounds){
+  const w = mapCanvas.width, h = mapCanvas.height;
+  const pad = 10;
+  const sx = (w - pad*2) / Math.max(1e-6, bounds.maxX - bounds.minX);
+  const sz = (h - pad*2) / Math.max(1e-6, bounds.maxZ - bounds.minZ);
+  const x = pad + (p.x - bounds.minX) * sx;
+  const y = h - (pad + (p.z - bounds.minZ) * sz);
+  return {x,y};
+}
+function getMapBounds(){
+  let minX=0, maxX=0, minZ=0, maxZ=0;
+  if(worlds.length){
+    minX = +Infinity; maxX = -Infinity; minZ = +Infinity; maxZ = -Infinity;
+    for(const w of worlds){
+      const wp = (w.pos || BABYLON.Vector3.Zero()).add(w.localCenter || BABYLON.Vector3.Zero());
+      minX = Math.min(minX, wp.x); maxX = Math.max(maxX, wp.x);
+      minZ = Math.min(minZ, wp.z); maxZ = Math.max(maxZ, wp.z);
+    }
+  }
+  const node = currentTarget();
+  minX = Math.min(minX, node.position.x);
+  maxX = Math.max(maxX, node.position.x);
+  minZ = Math.min(minZ, node.position.z);
+  maxZ = Math.max(maxZ, node.position.z);
+
+  const dx = Math.max(60, (maxX - minX) * 0.25);
+  const dz = Math.max(60, (maxZ - minZ) * 0.25);
+  return {minX:minX-dx, maxX:maxX+dx, minZ:minZ-dz, maxZ:maxZ+dz};
+}
+function drawMinimap(){
+  const w = mapCanvas.width, h = mapCanvas.height;
+  mapCtx.clearRect(0,0,w,h);
+  mapCtx.fillStyle = "rgba(0,0,0,0.55)";
+  mapCtx.fillRect(0,0,w,h);
+
+  const bounds = getMapBounds();
+
+  for(let i=0;i<worlds.length;i++){
+    const wp = (worlds[i].pos || BABYLON.Vector3.Zero()).add(worlds[i].localCenter || BABYLON.Vector3.Zero());
+    const pt = mapWorldToMini(wp, bounds);
+    const isCur = (i === worldIndex);
+    mapCtx.beginPath();
+    mapCtx.arc(pt.x, pt.y, isCur ? 5 : 3.5, 0, Math.PI*2);
+    mapCtx.fillStyle = isCur ? "rgba(0,255,255,0.95)" : "rgba(255,255,255,0.85)";
+    mapCtx.fill();
+  }
+
+  const node = currentTarget();
+  const ap = mapWorldToMini(node.position, bounds);
+  mapCtx.beginPath();
+  mapCtx.arc(ap.x, ap.y, 4.5, 0, Math.PI*2);
+  mapCtx.fillStyle = "rgba(255,80,80,0.95)";
+  mapCtx.fill();
+
+  mapLabel.textContent = worlds.length ? `${worldIndex+1}/${worlds.length}` : "map";
+}
+mapCanvas.addEventListener("pointerdown",(e)=>{
+  const rect = mapCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
+  const bounds = getMapBounds();
+
+  let best = -1, bestD = 1e9;
+  for(let i=0;i<worlds.length;i++){
+    const wp = (worlds[i].pos || BABYLON.Vector3.Zero()).add(worlds[i].localCenter || BABYLON.Vector3.Zero());
+    const pt = mapWorldToMini(wp, bounds);
+    const d = Math.hypot(pt.x - x, pt.y - y);
+    if(d < bestD){ bestD = d; best = i; }
+  }
+  if(best >= 0 && bestD <= 20) focusWorld(best);
 });
 
-/* ================= LOOP ================= */
+// Load all
+async function loadAll(){
+  const {owner, repo} = getOwnerRepo();
+  say(`v12 running.
+Repo: ${owner}/${repo}
+Listing /glb…`);
+
+  const glbs = await listGlbs(owner, repo);
+  if(!glbs.length){ say("No .glb files found in /glb."); return; }
+
+  const avatarFile = glbs.find(g=>g.name.toLowerCase()==="avatar.glb");
+  const worldFiles = glbs.filter(g=>g!==avatarFile);
+
+  say(`Found ${glbs.length} GLBs
+Worlds=${worldFiles.length} Avatar=${avatarFile? "YES":"NO"}
+Minimap dots + beacons always show worlds.`);
+
+  // worlds
+  for(const g of worldFiles){
+    const beacon = makeBeacon();
+    try{
+      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
+      res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; forceVisible(m); });
+
+      // bounds at origin => store LOCAL center (this is the key fix)
+      const b = computeBounds(root.getChildMeshes(false));
+      const localCenter = b.ok ? b.center.clone() : BABYLON.Vector3.Zero();
+      const diag = b.ok ? b.diag : 200;
+
+      worlds.push({name:g.name, root, diag, pos:new BABYLON.Vector3(0,0,0), localCenter, beacon});
+    }catch(e){
+      worlds.push({name:g.name, root:null, diag:200, pos:new BABYLON.Vector3(0,0,0), localCenter:BABYLON.Vector3.Zero(), beacon});
+    }
+  }
+
+  layoutWorlds();
+  for(const w of worlds){ if(w.beacon) w.beacon.setEnabled(showBeacons); }
+
+  // avatar
+  if(avatarFile){
+    try{
+      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene);
+      res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; avatarForceVisible(m); });
+      scaleAvatarToHuman(root);
+      avatar = {root, yaw:0, pitch:0};
+      avatarLoaded = true;
+      follow.lockedTarget = root;
+    }catch(e){
+      avatarLoaded = false;
+      follow.lockedTarget = proof;
+    }
+  } else {
+    avatarLoaded = false;
+    follow.lockedTarget = proof;
+  }
+
+  if(worlds.length) focusWorld(0);
+  else say("No worlds loaded.");
+}
+
+// Movement feel + stick-only look
+let moveVel = new BABYLON.Vector3(0,0,0);
+
 scene.onBeforeRenderObservable.add(()=>{
-  const l=joyL(), r=joyR();
-  const {f,r:rt}=dirs();
+  const dt = Math.min(0.05, engine.getDeltaTime()/1000);
+  proof.rotation.y += 0.01;
 
-  if(state.mode==="free"){
-    camera.position.addInPlace(f.scale(-l.y*state.speed));
-    camera.position.addInPlace(rt.scale(l.x*state.speed));
-    camera.position.y+=r.y*state.vert;
+  const node = currentTarget();
+
+  // input
+  let f=0,s=0,u=0;
+  if(keys.has("KeyW")) f += 1;
+  if(keys.has("KeyS")) f -= 1;
+  if(keys.has("KeyD")) s += 1;
+  if(keys.has("KeyA")) s -= 1;
+  if(keys.has("KeyE")) u += 1;
+  if(keys.has("KeyQ")) u -= 1;
+
+  f += deadzoneCurve(rawMove.y, 0.10, 1.55);
+  s += deadzoneCurve(rawMove.x, 0.10, 1.55);
+  if(upHeld) u += 1;
+  if(downHeld) u -= 1;
+
+  // look
+  let yaw = 0;
+  if(avatarLoaded && avatar){
+    const lx = deadzoneCurve(rawLook.x, 0.08, 1.25);
+    const ly = deadzoneCurve(rawLook.y, 0.08, 1.25);
+
+    avatar.yaw += lx * 2.8 * dt;
+    avatar.pitch += ly * 2.0 * dt;
+    avatar.pitch = Math.max(-0.75, Math.min(0.75, avatar.pitch));
+
+    node.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(0, avatar.yaw, 0);
+    follow.heightOffset = 2.8 + (avatar.pitch * 2.2);
+    yaw = avatar.yaw;
   }
 
-  targetFov =
-    l.x>0.6 ? 0.65 :
-    l.x<-0.6 ? 1.0 :
-    BASE_FOV;
+  const forward = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right   = new BABYLON.Vector3(Math.sin(yaw + Math.PI/2), 0, Math.cos(yaw + Math.PI/2));
 
-  camera.fov+=(targetFov-camera.fov)*0.1;
-  updateCameraMode();
+  let dir = forward.scale(f).add(right.scale(s));
+  if(dir.lengthSquared() > 1e-6) dir = dir.normalize();
+
+  const sprint = (keys.has("ShiftLeft") || keys.has("ShiftRight") || sprintHeld) ? 3.2 : 1.0;
+  const baseSpeed = 42.0;
+  const accel = 22.0;
+  const damping = 10.0;
+
+  const targetVel = dir.scale(baseSpeed * sprint);
+  const blend = 1 - Math.exp(-accel * dt);
+  moveVel = moveVel.add(targetVel.subtract(moveVel).scale(blend));
+
+  if(targetVel.lengthSquared() < 1e-6){
+    const d = 1 - Math.exp(-damping * dt);
+    moveVel = moveVel.scale(1 - d);
+  }
+
+  node.position.addInPlace(moveVel.scale(dt));
+  node.position.y += u * (18.0 * sprint) * dt;
+
+  drawMinimap();
 });
 
 engine.runRenderLoop(()=>scene.render());
-addEventListener("resize",()=>engine.resize());
+setTimeout(()=>engine.resize(),100);
+window.addEventListener("resize",()=>engine.resize());
+
+loadAll().catch(e=>say(String(e && (e.message||e) || e)));
 </script>
 </body>
 </html>
