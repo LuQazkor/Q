@@ -3,15 +3,17 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<title>GLB World v9</title>
+<title>GLB World v10</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;-webkit-text-size-adjust:100%}
 #c{width:100vw;height:100vh;display:block;background:#111;touch-action:none}
+
 #version-badge{
   position:fixed;top:10px;right:10px;z-index:10000;
   padding:6px 10px;font:12px system-ui;color:#fff;background:rgba(0,0,0,.85);
   border:1px solid rgba(255,255,255,.30);border-radius:999px;pointer-events:none
 }
+
 #hud{
   position:fixed;top:10px;left:10px;z-index:9999;max-width:calc(100vw - 20px);
   font:13px system-ui;color:#fff;background:rgba(0,0,0,.72);
@@ -24,6 +26,24 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
   color:#fff;font:13px system-ui;border:1px solid rgba(255,255,255,.18)
 }
 #hud button:active{transform:scale(.97)}
+
+#minimapWrap{
+  position:fixed;top:10px;right:10px;z-index:9999;
+  width:132px;height:132px;border-radius:14px;
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.18);
+  overflow:hidden;backdrop-filter: blur(6px)
+}
+#minimap{
+  width:132px;height:132px;display:block;touch-action:none
+}
+#minimapLabel{
+  position:absolute;left:8px;bottom:6px;
+  font:11px system-ui;color:rgba(255,255,255,.9);
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+  pointer-events:none
+}
+
 #mobile{position:fixed;left:0;right:0;bottom:0;z-index:9998;pointer-events:none;display:block}
 .pad{
   pointer-events:auto;position:absolute;bottom:14px;width:150px;height:150px;border-radius:999px;
@@ -47,10 +67,10 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
 </style>
 </head>
 <body>
-<div id="version-badge">v9</div>
+<div id="version-badge">v10</div>
 
 <div id="hud">
-  <div><b>Status</b> v9 (avatar follow fixed + size-based spacing)</div>
+  <div><b>Status</b> v10 (FAST flight + minimap dots + tap-to-teleport)</div>
   <div class="row">
     <button id="prev">Prev</button>
     <button id="next">Next</button>
@@ -60,12 +80,18 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
   <div class="small" id="msg">Booting…</div>
 </div>
 
+<div id="minimapWrap" aria-label="Minimap">
+  <canvas id="minimap" width="132" height="132"></canvas>
+  <div id="minimapLabel">map</div>
+</div>
+
 <div id="mobile">
   <div id="leftPad" class="pad"><div id="leftStick" class="stick"></div></div>
   <div id="rightPad" class="pad"><div id="rightStick" class="stick"></div></div>
   <div id="btns">
     <button id="bUp">Up</button>
     <button id="bDown">Down</button>
+    <button id="bSprint">Sprint</button>
     <button id="bFocus">Focus</button>
     <button id="bReset">Reset</button>
   </div>
@@ -75,60 +101,53 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
 <script>
 const msgEl = document.getElementById("msg");
 const say = (t)=>msgEl.textContent = t;
 
+const canvas = document.getElementById("c");
 if(!BABYLON.Engine.isSupported()){
   say("❌ WebGL NOT supported/enabled.");
   throw new Error("WebGL not supported");
 }
-
-const canvas = document.getElementById("c");
 const engine = new BABYLON.Engine(canvas, true);
-const scene = new BABYLON.Scene(scene);
-</script>
-<script>
-/* (Fix: the line above was wrong in some past drafts; we explicitly re-create scene properly below) */
-</script>
-<script>
-/* Rebuild scene correctly */
-engine.stopRenderLoop();
-const scene2 = new BABYLON.Scene(engine);
-scene2.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
 
-new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene2).intensity = 1.25;
-const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.25), scene2);
+// lights
+new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene).intensity = 1.25;
+const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.25), scene);
 sun.position = new BABYLON.Vector3(100,200,100);
 sun.intensity = 1.9;
 
-// Always-visible grid + cube at origin
-const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:1200, height:1200}, scene2);
-const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene2);
+// always-visible grid + proof cube
+const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:1400, height:1400}, scene);
+const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene);
 gridMat.wireframe = true;
 gridMat.emissiveColor = new BABYLON.Color3(0.2,0.9,1.0);
 gridMat.diffuseColor = new BABYLON.Color3(0,0,0);
 grid.material = gridMat;
 
-const proof = BABYLON.MeshBuilder.CreateBox("PROOF", {size:8}, scene2);
+const proof = BABYLON.MeshBuilder.CreateBox("PROOF", {size:8}, scene);
 proof.position = new BABYLON.Vector3(0,5,25);
-const proofMat = new BABYLON.StandardMaterial("PM", scene2);
+const proofMat = new BABYLON.StandardMaterial("PM", scene);
 proofMat.emissiveColor = new BABYLON.Color3(1,0.2,0.2);
 proof.material = proofMat;
 
-// Follow camera (THIS is what stops “feet cam”)
-const follow = new BABYLON.FollowCamera("follow", new BABYLON.Vector3(0, 3, -12), scene2);
-follow.radius = 10;          // distance behind
-follow.heightOffset = 2.3;   // above
-follow.rotationOffset = 180; // behind avatar
-follow.cameraAcceleration = 0.08;
-follow.maxCameraSpeed = 20;
+// Follow camera (3rd person)
+const follow = new BABYLON.FollowCamera("follow", new BABYLON.Vector3(0, 3, -12), scene);
+follow.radius = 12;
+follow.heightOffset = 2.6;
+follow.rotationOffset = 180;
+follow.cameraAcceleration = 0.10;
+follow.maxCameraSpeed = 40;
 follow.lowerRadiusLimit = 2.5;
-follow.upperRadiusLimit = 120;
+follow.upperRadiusLimit = 220;
 follow.attachControl(canvas, true);
-scene2.activeCamera = follow;
+scene.activeCamera = follow;
 
-// Helpers
+// helpers
 function getOwnerRepo(){
   const owner = location.hostname.split(".")[0];
   const parts = location.pathname.split("/").filter(Boolean);
@@ -175,7 +194,7 @@ function avatarForceVisible(mesh){
     if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.5) mesh.material.alpha = 1.0;
     try{ mesh.material.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8); }catch(_){}
   } else {
-    const m = new BABYLON.StandardMaterial("AV_MAT_"+mesh.name, scene2);
+    const m = new BABYLON.StandardMaterial("AV_MAT_"+mesh.name, scene);
     m.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8);
     m.backFaceCulling = false;
     mesh.material = m;
@@ -190,20 +209,23 @@ function scaleAvatarToHuman(root){
   let s = TARGET / height;
   s = Math.max(0.001, Math.min(200, s));
   root.scaling = root.scaling.scale(s);
+
+  // feet to y=0
   const b2 = computeBounds(meshes);
-  if(b2.ok) root.position.y -= b2.min.y; // feet to y=0
+  if(b2.ok) root.position.y -= b2.min.y;
 }
 
-// Worlds layout: spacing based on each world's diagonal
+// worlds
 const worlds = []; // {name, root, diag, pos, center}
 let worldIndex = 0;
 
+// Layout: size-based spacing, BUT not insane distances
 function layoutWorlds(){
-  // place in a line along X with size-based gaps (prevents overlap)
+  // line on X with clamped spacing so you can find them quickly
   let x = 0;
-  const GAP = 80;
+  const GAP = 55;
   for(const w of worlds){
-    const half = Math.max(40, w.diag * 0.5);
+    const half = Math.max(18, Math.min(120, w.diag * 0.55));
     x += half + GAP;
     w.pos = new BABYLON.Vector3(x, 0, 0);
     if(w.root) w.root.position = w.pos.clone();
@@ -218,23 +240,25 @@ function focusWorld(i){
   if(!worlds.length) return;
   worldIndex = (i + worlds.length) % worlds.length;
   const w = worlds[worldIndex];
+
   const p = (w.center ? w.center.clone() : w.pos.clone());
   p.y = 0;
 
-  if(avatarLoaded && avatar && avatar.root){
-    avatar.root.position = p.clone();
-    avatar.root.position.y = 0;
-    follow.lockedTarget = avatar.root; // ALWAYS follow avatar
-  } else {
-    follow.lockedTarget = proof;
-  }
+  // move avatar (or proof) to the world center
+  const node = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
+  node.position = p.clone();
+  node.position.y = 0;
 
-  say(`World: ${w.name} (${worldIndex+1}/${worlds.length})\nDiag: ${Math.round(w.diag)}`);
+  // keep follow camera locked to node
+  follow.lockedTarget = node;
+
+  say(`World: ${w.name} (${worldIndex+1}/${worlds.length})\nDiag: ${Math.round(w.diag)}\nTip: Tap minimap dot to teleport.`);
 }
 
 document.getElementById("next").onclick = ()=>focusWorld(worldIndex+1);
 document.getElementById("prev").onclick = ()=>focusWorld(worldIndex-1);
 document.getElementById("focus").onclick = ()=>focusWorld(worldIndex);
+
 document.getElementById("reset").onclick = ()=>{
   if(avatarLoaded && avatar){
     avatar.yaw = 0;
@@ -250,7 +274,7 @@ document.getElementById("bReset").onclick = ()=>document.getElementById("reset")
 // Mobile controls
 let moveStick = {x:0,y:0};
 let lookStick = {x:0,y:0};
-let upHeld=false, downHeld=false;
+let upHeld=false, downHeld=false, sprintHeld=false;
 
 function setupPad(padId, stickId, onMove){
   const pad = document.getElementById(padId);
@@ -286,6 +310,7 @@ function hold(btnId, setter){
 }
 hold("bUp", v=>upHeld=v);
 hold("bDown", v=>downHeld=v);
+hold("bSprint", v=>sprintHeld=v);
 
 // Desktop keys
 const keys = new Set();
@@ -305,21 +330,115 @@ canvas.addEventListener("pointermove",(e)=>{
     const prevD=dist({x:a.px,y:a.py},{x:b.px,y:b.py});
     const d=dist(a,b);
     const delta=d-prevD;
-    follow.radius = Math.max(2.5, Math.min(120, follow.radius - delta*0.03));
+    follow.radius = Math.max(2.5, Math.min(220, follow.radius - delta*0.035));
     e.preventDefault();
   }
 },{passive:false});
 canvas.addEventListener("pointerup",(e)=>touches.delete(e.pointerId),{passive:false});
 canvas.addEventListener("pointercancel",(e)=>touches.delete(e.pointerId),{passive:false});
 canvas.addEventListener("wheel",(e)=>{
-  follow.radius = Math.max(2.5, Math.min(120, follow.radius + e.deltaY*0.01));
+  follow.radius = Math.max(2.5, Math.min(220, follow.radius + e.deltaY*0.01));
   e.preventDefault();
 },{passive:false});
+
+// MINIMAP
+const mapCanvas = document.getElementById("minimap");
+const mapCtx = mapCanvas.getContext("2d");
+const mapLabel = document.getElementById("minimapLabel");
+
+function mapWorldToMini(p, bounds){
+  const w = mapCanvas.width, h = mapCanvas.height;
+  const pad = 10;
+  const sx = (w - pad*2) / Math.max(1e-6, bounds.maxX - bounds.minX);
+  const sz = (h - pad*2) / Math.max(1e-6, bounds.maxZ - bounds.minZ);
+  const x = pad + (p.x - bounds.minX) * sx;
+  const y = h - (pad + (p.z - bounds.minZ) * sz);
+  return {x,y};
+}
+function getMapBounds(){
+  // bounds from worlds positions
+  let minX=0, maxX=0, minZ=0, maxZ=0;
+  if(worlds.length){
+    minX = +Infinity; maxX = -Infinity; minZ = +Infinity; maxZ = -Infinity;
+    for(const w of worlds){
+      const p = w.pos || BABYLON.Vector3.Zero();
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    }
+  }
+  // also include avatar/proof
+  const node = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
+  minX = Math.min(minX, node.position.x);
+  maxX = Math.max(maxX, node.position.x);
+  minZ = Math.min(minZ, node.position.z);
+  maxZ = Math.max(maxZ, node.position.z);
+
+  // expand bounds a bit
+  const dx = Math.max(50, (maxX - minX) * 0.25);
+  const dz = Math.max(50, (maxZ - minZ) * 0.25);
+  return {minX:minX-dx, maxX:maxX+dx, minZ:minZ-dz, maxZ:maxZ+dz};
+}
+function drawMinimap(){
+  const w = mapCanvas.width, h = mapCanvas.height;
+  mapCtx.clearRect(0,0,w,h);
+
+  // background
+  mapCtx.fillStyle = "rgba(0,0,0,0.55)";
+  mapCtx.fillRect(0,0,w,h);
+
+  const bounds = getMapBounds();
+
+  // worlds dots
+  for(let i=0;i<worlds.length;i++){
+    const wp = worlds[i].pos || BABYLON.Vector3.Zero();
+    const pt = mapWorldToMini(wp, bounds);
+    const isCur = (i === worldIndex);
+
+    mapCtx.beginPath();
+    mapCtx.arc(pt.x, pt.y, isCur ? 5 : 3.5, 0, Math.PI*2);
+    mapCtx.fillStyle = isCur ? "rgba(0,255,255,0.95)" : "rgba(255,255,255,0.85)";
+    mapCtx.fill();
+  }
+
+  // avatar/proof dot
+  const node = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
+  const ap = mapWorldToMini(node.position, bounds);
+  mapCtx.beginPath();
+  mapCtx.arc(ap.x, ap.y, 4.5, 0, Math.PI*2);
+  mapCtx.fillStyle = "rgba(255,80,80,0.95)";
+  mapCtx.fill();
+
+  // label
+  if(worlds.length){
+    mapLabel.textContent = `${worldIndex+1}/${worlds.length}`;
+  } else {
+    mapLabel.textContent = "map";
+  }
+}
+
+// tap minimap dot to teleport
+mapCanvas.addEventListener("pointerdown",(e)=>{
+  const rect = mapCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
+
+  const bounds = getMapBounds();
+  let best = -1, bestD = 1e9;
+  for(let i=0;i<worlds.length;i++){
+    const wp = worlds[i].pos || BABYLON.Vector3.Zero();
+    const pt = mapWorldToMini(wp, bounds);
+    const d = Math.hypot(pt.x - x, pt.y - y);
+    if(d < bestD){ bestD = d; best = i; }
+  }
+  if(best >= 0 && bestD <= 18){
+    focusWorld(best);
+  }
+});
 
 // Load everything
 async function loadAll(){
   const {owner, repo} = getOwnerRepo();
-  say(`v9 running.\nRepo: ${owner}/${repo}\nListing /glb…`);
+  say(`v10 running.\nRepo: ${owner}/${repo}\nListing /glb…`);
 
   const glbs = await listGlbs(owner, repo);
   if(!glbs.length){ say("No .glb files found in /glb."); return; }
@@ -327,13 +446,13 @@ async function loadAll(){
   const avatarFile = glbs.find(g=>g.name.toLowerCase()==="avatar.glb");
   const worldFiles = glbs.filter(g=>g!==avatarFile);
 
-  say(`Found ${glbs.length} GLBs\nWorlds=${worldFiles.length} Avatar=${avatarFile? "YES":"NO"}`);
+  say(`Found ${glbs.length} GLBs\nWorlds=${worldFiles.length} Avatar=${avatarFile? "YES":"NO"}\nControls: mobile sticks + Sprint; desktop WASD + Shift`);
 
-  // Worlds first
+  // Worlds
   for(const g of worldFiles){
     try{
-      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene2);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene2);
+      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
       res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; worldSafe(m); });
       const b = computeBounds(root.getChildMeshes(false));
       worlds.push({name:g.name, root, diag: b.ok? b.diag : 200, pos:new BABYLON.Vector3(0,0,0), center: b.ok? b.center : null});
@@ -344,20 +463,19 @@ async function loadAll(){
     }
   }
 
-  // Layout to avoid overlap
   layoutWorlds();
 
   // Avatar
   if(avatarFile){
     try{
-      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene2);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene2);
+      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene);
       res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; avatarForceVisible(m); });
       scaleAvatarToHuman(root);
       avatar = {root, yaw:0};
       avatarLoaded = true;
       follow.lockedTarget = root;
-      say("Avatar loaded ✅ (autoscaled + follow camera locked)");
+      say("Avatar loaded ✅ (autoscaled + follow locked)\nTip: Tap minimap dot to jump.");
     }catch(e){
       avatarLoaded = false;
       follow.lockedTarget = proof;
@@ -373,15 +491,14 @@ async function loadAll(){
   else say("No worlds loaded.");
 }
 
-scene2.onBeforeRenderObservable.add(()=>{
+scene.onBeforeRenderObservable.add(()=>{
   const dt = Math.min(0.05, engine.getDeltaTime()/1000);
   proof.rotation.y += 0.01;
 
-  // Movement drives avatar (preferred). If no avatar, we still move proof as a stand-in.
-  const targetNode = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
+  const node = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
 
+  // input (desktop + mobile)
   let f=0,s=0,u=0;
-  // Desktop
   if(keys.has("KeyW")) f += 1;
   if(keys.has("KeyS")) f -= 1;
   if(keys.has("KeyD")) s += 1;
@@ -389,17 +506,16 @@ scene2.onBeforeRenderObservable.add(()=>{
   if(keys.has("KeyE")) u += 1;
   if(keys.has("KeyQ")) u -= 1;
 
-  // Mobile
   f += moveStick.y;
   s += moveStick.x;
   if(upHeld) u += 1;
   if(downHeld) u -= 1;
 
-  // Look -> rotates around Y (avatar yaw) so you don't get “feet cam”
-  const yawSpeed = 2.4;
+  // look yaw
+  const yawSpeed = 3.2;
   if(avatarLoaded && avatar){
     avatar.yaw += lookStick.x * yawSpeed * dt;
-    targetNode.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(0, avatar.yaw, 0);
+    node.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(0, avatar.yaw, 0);
   }
 
   const yaw = (avatarLoaded && avatar) ? avatar.yaw : 0;
@@ -409,12 +525,18 @@ scene2.onBeforeRenderObservable.add(()=>{
   let v = forward.scale(f).add(right.scale(s));
   if(v.lengthSquared()>1e-6) v = v.normalize();
 
-  const speed = 7.0, upSpeed = 5.0;
-  targetNode.position.addInPlace(v.scale(speed*dt));
-  targetNode.position.y += u * upSpeed * dt;
+  // SPEED: MUCH faster + sprint multiplier
+  const sprint = (keys.has("ShiftLeft") || keys.has("ShiftRight") || sprintHeld) ? 3.5 : 1.0;
+  const baseSpeed = 32.0;     // <— FAST
+  const baseUp = 16.0;        // <— FAST vertical
+  node.position.addInPlace(v.scale(baseSpeed * sprint * dt));
+  node.position.y += u * (baseUp * sprint) * dt;
+
+  // minimap
+  drawMinimap();
 });
 
-engine.runRenderLoop(()=>scene2.render());
+engine.runRenderLoop(()=>scene.render());
 setTimeout(()=>engine.resize(),100);
 window.addEventListener("resize",()=>engine.resize());
 
