@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Babylon Avatar Loader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #1e1e1e;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: black;
+      color: #00ffff;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<div id="badge">Avatar Loader v1</div>
+<canvas id="renderCanvas"></canvas>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+<script>
+console.log("=== BABYLON AVATAR LOADER v1 ===");
+
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.12, 1);
+
+// Camera (fixed, simple)
+const camera = new BABYLON.ArcRotateCamera(
+  "cam",
+  Math.PI / 2,
+  Math.PI / 2.5,
+  4,
+  BABYLON.Vector3.Zero(),
+  scene
+);
+camera.attachControl(canvas, false);
+
+// Light
+new BABYLON.HemisphericLight(
+  "light",
+  new BABYLON.Vector3(0, 1, 0),
+  scene
+);
+
+// Ground grid (visual reference)
+const ground = BABYLON.MeshBuilder.CreateGround("ground", {
+  width: 10,
+  height: 10
+}, scene);
+
+const gridMat = new BABYLON.GridMaterial("grid", scene);
+gridMat.majorUnitFrequency = 1;
+gridMat.gridRatio = 1;
+gridMat.lineColor = new BABYLON.Color3(0.6, 0.6, 0.6);
+gridMat.mainColor = new BABYLON.Color3(0, 0, 0);
+ground.material = gridMat;
+
+// ===== LOAD AVATAR =====
+const AVATAR_URL = "/glb/avatar.glb";
+console.log("Loading:", AVATAR_URL);
+
+BABYLON.SceneLoader.ImportMeshAsync(
+  null,
+  "",
+  AVATAR_URL,
+  scene
+).then(result => {
+  console.log("Avatar loaded", result);
+
+  const root = new BABYLON.TransformNode("avatarRoot", scene);
+  result.meshes.forEach(m => {
+    if (m !== scene.meshes[0]) m.parent = root;
+  });
+
+  // Normalize size
+  const bounds = root.getHierarchyBoundingVectors();
+  const size = bounds.max.subtract(bounds.min);
+  const maxAxis = Math.max(size.x, size.y, size.z);
+  const scale = 1 / maxAxis;
+
+  root.scaling.setAll(scale);
+
+  // Center
+  const center = bounds.min.add(size.scale(0.5));
+  root.position.subtractInPlace(center.scale(scale));
+
+  // Frame camera
+  camera.radius = maxAxis * 3;
+  camera.target = BABYLON.Vector3.Zero();
+
+}).catch(err => {
+  console.error("❌ AVATAR FAILED TO LOAD", err);
+});
+
+// Render loop
+engine.runRenderLoop(() => {
+  scene.render();
+});
+
+window.addEventListener("resize", () => {
+  engine.resize();
+});
+</script>
+
+</body>
+</html>
