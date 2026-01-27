@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Auto Loader World</title>
+<title>GLB In-Browser Loader</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
 
 <style>
@@ -26,6 +26,19 @@ html,body{
   padding:12px 14px;
   border-radius:14px;
   font-size:14px;
+  z-index:10;
+}
+
+#upload{
+  position:absolute;
+  top:12px;
+  right:12px;
+  background:#000;
+  color:#6ff;
+  padding:10px 14px;
+  border-radius:12px;
+  font-size:13px;
+  cursor:pointer;
   z-index:10;
 }
 
@@ -56,12 +69,17 @@ html,body{
 
 <body>
 <div id="hud">
-<b>GLB AUTO WORLD</b><br/>
+<b>IN-BROWSER GLB WORLD</b><br/>
 🕹 Left: move<br/>
 🕹 Right: fly + turn<br/>
 👆 Drag: look<br/>
-📦 /glb auto-loaded
+📂 Upload GLBs
 </div>
+
+<label id="upload">
+Upload GLBs
+<input id="fileInput" type="file" accept=".glb" multiple hidden>
+</label>
 
 <div id="joyL" class="joy"><div class="knob"></div></div>
 <div id="joyR" class="joy"><div class="knob"></div></div>
@@ -151,23 +169,21 @@ if(avatarURL){
   });
 }
 
-/* ================= LOAD ALL GLBS ================= */
-async function loadAllGLB(){
-  const res=await fetch("glb/");
-  const text=await res.text();
-  const matches=[...text.matchAll(/href="([^"]+\.glb)"/g)];
-  const urls=[...new Set(matches.map(m=>m[1]))];
+/* ================= UPLOAD + LOAD ================= */
+let uploadedCount=0;
 
-  const spacing=12;
-  const cols=Math.ceil(Math.sqrt(urls.length));
+document.getElementById("fileInput").onchange=e=>{
+  const files=[...e.target.files];
+  const spacing=14;
+  const cols=Math.ceil(Math.sqrt(files.length));
 
-  for(let i=0;i<urls.length;i++){
-    const url="glb/"+urls[i].split("/").pop();
+  files.forEach((file,i)=>{
+    const url=URL.createObjectURL(file);
 
     BABYLON.SceneLoader.ImportMeshAsync(
       null,"",url,scene
-    ).then(result=>{
-      const root=result.meshes.find(m=>!m.parent)||result.meshes[0];
+    ).then(res=>{
+      const root=res.meshes.find(m=>!m.parent)||res.meshes[0];
 
       // normalize size
       const box=root.getHierarchyBoundingVectors(true);
@@ -176,15 +192,14 @@ async function loadAllGLB(){
       const scale=6/maxDim;
       root.scaling.setAll(scale);
 
-      // spread
-      const x=(i%cols)*spacing - (cols*spacing)/2;
-      const z=Math.floor(i/cols)*spacing - (cols*spacing)/2;
+      // spread grid
+      const idx=uploadedCount++;
+      const x=(idx%cols)*spacing - (cols*spacing)/2;
+      const z=Math.floor(idx/cols)*spacing - (cols*spacing)/2;
       root.position.set(x,0,z);
     });
-  }
-}
-
-loadAllGLB();
+  });
+};
 
 /* ================= CAMERA LOOK ================= */
 let looking=false,lastX=0,lastY=0;
