@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Overwatch Viewer v23</title>
+<title>GLB Overwatch Viewer v24</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
 
 <style>
@@ -10,7 +10,7 @@ html,body{
   margin:0;
   padding:0;
   overflow:hidden;
-  background:#063636;
+  background:#042c2c; /* CHANGED COLOR so cache is obvious */
   touch-action:none;
   font-family:system-ui,-apple-system,BlinkMacSystemFont;
 }
@@ -19,7 +19,7 @@ html,body{
   position:absolute;
   top:12px;
   left:12px;
-  background:rgba(0,0,0,.6);
+  background:rgba(0,0,0,.65);
   color:#fff;
   padding:12px 14px;
   border-radius:14px;
@@ -33,9 +33,10 @@ html,body{
   right:12px;
   background:#000;
   color:#6ff;
-  padding:6px 10px;
+  padding:8px 12px;
   border-radius:999px;
-  font-size:12px;
+  font-size:13px;
+  font-weight:600;
   z-index:10;
 }
 
@@ -45,7 +46,7 @@ html,body{
   width:140px;
   height:140px;
   border-radius:50%;
-  background:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.1);
   touch-action:none;
   z-index:10;
 }
@@ -61,7 +62,7 @@ html,body{
   height:60px;
   margin:-30px;
   border-radius:50%;
-  background:rgba(255,255,255,.35);
+  background:rgba(255,255,255,.4);
 }
 </style>
 </head>
@@ -69,11 +70,12 @@ html,body{
 <body>
 <div id="hud">
 <b>FINAL HUMAN CONTROL MODEL</b><br/>
-👁 Look: 1-finger drag<br/>
-🕹 Move: dual joysticks<br/>
-✋ Tap: interact
+👁 Look: 1-finger drag (off sticks)<br/>
+🕹 Left: move | Right: strafe + lift<br/>
+📦 GLBs: /glb/index.json
 </div>
-<div id="version">v23</div>
+
+<div id="version">v24</div>
 
 <div id="joyL" class="joy"><div class="knob"></div></div>
 <div id="joyR" class="joy"><div class="knob"></div></div>
@@ -82,6 +84,10 @@ html,body{
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
 
 <script>
+/* -------------------- DEBUG BANNER -------------------- */
+console.log("GLB VIEWER v24 LOADED");
+console.log("Protocol:", location.protocol);
+
 /* -------------------- CANVAS / ENGINE -------------------- */
 const canvas=document.createElement("canvas");
 canvas.style.position="fixed";
@@ -93,7 +99,7 @@ document.body.appendChild(canvas);
 
 const engine=new BABYLON.Engine(canvas,true);
 const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color4(0.04,0.22,0.22,1);
+scene.clearColor=new BABYLON.Color4(0.03,0.25,0.25,1);
 
 /* -------------------- CAMERA -------------------- */
 const camera=new BABYLON.UniversalCamera(
@@ -101,7 +107,6 @@ const camera=new BABYLON.UniversalCamera(
 );
 camera.attachControl(canvas,false);
 camera.minZ=0.1;
-camera.fov=0.9;
 scene.activeCamera=camera;
 
 /* -------------------- LIGHT -------------------- */
@@ -151,11 +156,10 @@ function makeJoy(el){
 const joyL=makeJoy(document.getElementById("joyL"));
 const joyR=makeJoy(document.getElementById("joyR"));
 
-/* -------------------- LOOK (1 FINGER OFF JOYSTICKS) -------------------- */
+/* -------------------- LOOK -------------------- */
 let lx=0,ly=0,looking=false;
 canvas.addEventListener("pointerdown",e=>{
-  if(e.target.classList.contains("joy")||
-     e.target.closest(".joy")) return;
+  if(e.target.closest(".joy")) return;
   looking=true;
   lx=e.clientX; ly=e.clientY;
 });
@@ -170,19 +174,30 @@ canvas.addEventListener("pointerup",()=>looking=false);
 
 /* -------------------- LOAD MANIFEST -------------------- */
 async function loadAllGLBs(){
-  const res=await fetch("/glb/index.json");
-  const files=await res.json();
+  console.log("Fetching /glb/index.json …");
+  let res;
+  try{
+    res=await fetch("/glb/index.json",{cache:"no-store"});
+  }catch(err){
+    alert("❌ Failed to fetch /glb/index.json");
+    throw err;
+  }
 
-  let spacing=0;
+  if(!res.ok){
+    alert("❌ index.json not found or blocked");
+    return;
+  }
+
+  const files=await res.json();
+  console.log("Manifest loaded:", files);
+
+  let i=0;
   for(const file of files){
     const result=await BABYLON.SceneLoader.ImportMeshAsync(
       null,"/glb/",file,scene
     );
 
     const root=result.meshes[0];
-    root.computeWorldMatrix(true);
-
-    // Normalize size
     const bounds=root.getHierarchyBoundingVectors();
     const size=bounds.max.subtract(bounds.min).length();
     const scale=10/size;
@@ -194,19 +209,19 @@ async function loadAllGLBs(){
       camera.parent=playerRoot;
       camera.position.set(0,3,-8);
     }else{
-      root.position=new BABYLON.Vector3(
-        (spacing%5)*40-80,
+      root.position.set(
+        (i%5)*40-80,
         0,
-        Math.floor(spacing/5)*40
+        Math.floor(i/5)*40
       );
-      spacing++;
+      i++;
     }
   }
 }
 
 loadAllGLBs();
 
-/* -------------------- MOVEMENT (FLIGHT) -------------------- */
+/* -------------------- MOVEMENT -------------------- */
 scene.onBeforeRenderObservable.add(()=>{
   const l=joyL(), r=joyR();
   const speed=0.6;
@@ -230,9 +245,7 @@ scene.onBeforeRenderObservable.add(()=>{
 
 /* -------------------- LOOP -------------------- */
 engine.runRenderLoop(()=>scene.render());
-addEventListener("resize",()=>{
-  engine.resize();
-});
+addEventListener("resize",()=>engine.resize());
 </script>
 </body>
 </html>
