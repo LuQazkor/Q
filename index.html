@@ -4,31 +4,29 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
 <title>GLB World</title>
+
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 #c{width:100%;height:100%;display:block;touch-action:none}
 #hud{
-  position:fixed;top:10px;left:10px;z-index:20;
+  position:fixed;top:10px;left:10px;z-index:30;
   font:13px system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-  color:#fff;background:rgba(0,0,0,.55);
+  color:#fff;background:rgba(0,0,0,.62);
   padding:10px;border-radius:10px;max-width:calc(100vw - 20px)
 }
 #hud .small{opacity:.85;font-size:12px;margin-top:6px;white-space:pre-wrap}
-#mobile{
-  position:fixed;left:0;right:0;bottom:0;z-index:25;
-  pointer-events:none;
-}
-.pad{pointer-events:auto; position:absolute; bottom:14px; width:150px; height:150px;
+#mobile{position:fixed;left:0;right:0;bottom:0;z-index:35;pointer-events:none}
+.pad{
+  pointer-events:auto; position:absolute; bottom:14px; width:150px; height:150px;
   background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
   border-radius:999px; backdrop-filter: blur(6px);
 }
-#leftPad{left:14px;}
-#rightPad{right:14px; width:170px; height:170px;}
+#leftPad{left:14px}
+#rightPad{right:14px;width:170px;height:170px}
 .stick{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:64px; height:64px; border-radius:999px;
-  background:rgba(255,255,255,.18);
-  border:1px solid rgba(255,255,255,.22);
+  width:64px;height:64px;border-radius:999px;
+  background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.22);
 }
 #btns{
   pointer-events:auto;
@@ -37,12 +35,13 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 }
 button{
   border:0;border-radius:999px;padding:10px 12px;
-  background:rgba(0,0,0,.55); color:#fff; font:13px system-ui;
+  background:rgba(0,0,0,.62); color:#fff; font:13px system-ui;
   border:1px solid rgba(255,255,255,.14);
 }
 button:active{transform:scale(.98)}
 </style>
 </head>
+
 <body>
 <div id="hud">
   <div><b>Controls</b> Desktop: WASD + Mouse · Click to lock · Space/Shift up/down · E interact · F fly/walk · R reset · Ctrl sprint</div>
@@ -67,6 +66,36 @@ button:active{transform:scale(.98)}
 <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
 <script>
+/* ----------------------------
+   Compression support (iOS pain points)
+   - Draco (geometry)
+   - KTX2/Basis (textures)
+----------------------------- */
+try{
+  if (BABYLON.DracoCompression) {
+    BABYLON.DracoCompression.Configuration = {
+      decoder: {
+        wasmUrl: "https://cdn.babylonjs.com/draco_wasm_wrapper_gltf.js",
+        wasmBinaryUrl: "https://cdn.babylonjs.com/draco_decoder_gltf.wasm",
+        fallbackUrl: "https://cdn.babylonjs.com/draco_decoder_gltf.js"
+      }
+    };
+  }
+}catch(_){}
+
+try{
+  // Babylon uses KhronosTextureContainer2.URLConfig for KTX2 decoder/transcoder URLs
+  if (BABYLON.KhronosTextureContainer2 && BABYLON.KhronosTextureContainer2.URLConfig) {
+    BABYLON.KhronosTextureContainer2.URLConfig.jsDecoderModule  = "https://cdn.babylonjs.com/babylon.ktx2Decoder.js";
+    BABYLON.KhronosTextureContainer2.URLConfig.wasmDecoderModule= "https://cdn.babylonjs.com/babylon.ktx2Decoder.wasm";
+    BABYLON.KhronosTextureContainer2.URLConfig.jsMSCTranscoder  = "https://cdn.babylonjs.com/msc_basis_transcoder.js";
+    BABYLON.KhronosTextureContainer2.URLConfig.wasmMSCTranscoder= "https://cdn.babylonjs.com/msc_basis_transcoder.wasm";
+  }
+}catch(_){}
+
+/* ----------------------------
+   Scene setup
+----------------------------- */
 const canvas = document.getElementById("c");
 const engine = new BABYLON.Engine(canvas, true);
 const scene  = new BABYLON.Scene(engine);
@@ -78,8 +107,10 @@ const msg = (t)=>msgEl.textContent = t;
 
 new BABYLON.HemisphericLight("h", new BABYLON.Vector3(0,1,0), scene);
 
-// Camera
+// Fly by default for whitespace travel
 let flyMode = true;
+
+// Camera
 const cam = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,2,-10), scene);
 cam.attachControl(canvas, true);
 cam.angularSensibility = 3000;
@@ -90,12 +121,14 @@ cam.applyGravity = !flyMode;
 const baseSpeed = 0.35;
 cam.speed = baseSpeed;
 
-// Fallback ground
-const ground = BABYLON.MeshBuilder.CreateGround("g",{width:3000,height:3000},scene);
+// Safety ground (walk never falls)
+const ground = BABYLON.MeshBuilder.CreateGround("g",{width:5000,height:5000},scene);
 ground.isVisible = false;
 ground.checkCollisions = true;
 
-// --- Desktop movement state ---
+/* ----------------------------
+   Controls (desktop + mobile)
+----------------------------- */
 const keys = new Set();
 window.addEventListener("keydown", e=>{
   keys.add(e.code);
@@ -105,14 +138,46 @@ window.addEventListener("keydown", e=>{
 });
 window.addEventListener("keyup", e=>keys.delete(e.code));
 
-// Pointer lock (desktop)
 canvas.addEventListener("pointerdown", ()=>{
-  if(!isTouchDevice()){
-    canvas.requestPointerLock?.();
+  if(!isTouchDevice()) canvas.requestPointerLock?.();
+});
+
+function toggleFlyWalk(){
+  flyMode = !flyMode;
+  cam.applyGravity = !flyMode;
+  msg(flyMode ? "Mode: FLY" : "Mode: WALK");
+}
+
+function resetCam(){
+  cam.position.set(0,2,-10);
+  cam.rotation.set(0,0,0);
+  msg("Reset");
+}
+
+// Interact: center-screen pick (works on mobile too)
+function interact(){
+  const x = scene.getEngine().getRenderWidth()/2;
+  const y = scene.getEngine().getRenderHeight()/2;
+  const pick = scene.pick(x,y);
+  if(pick?.hit && pick.pickedMesh){
+    console.log("INTERACT:", pick.pickedMesh.name);
+    msg("INTERACT: " + pick.pickedMesh.name);
+  }else{
+    msg("INTERACT: nothing");
+  }
+}
+
+scene.onPointerObservable.add(ev=>{
+  if(ev.type === BABYLON.PointerEventTypes.POINTERPICK){
+    // tapping/clicking also interacts (nice on mobile)
+    if(ev.pickInfo?.hit && ev.pickInfo.pickedMesh){
+      console.log("INTERACT:", ev.pickInfo.pickedMesh.name);
+      msg("INTERACT: " + ev.pickInfo.pickedMesh.name);
+    }
   }
 });
 
-// --- Mobile UI enable ---
+// Mobile UI
 function isTouchDevice(){
   return matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
 }
@@ -120,59 +185,31 @@ if(isTouchDevice()){
   document.getElementById("mobile").style.display = "block";
 }
 
-// Fly/Walk toggle
-function toggleFlyWalk(){
-  flyMode = !flyMode;
-  cam.applyGravity = !flyMode;
-  msg(flyMode ? "Mode: FLY" : "Mode: WALK");
-}
-function resetCam(){
-  cam.position.set(0,2,-10);
-  cam.rotation.set(0,0,0);
-  msg("Reset");
-}
-
-// Interaction: pick center of screen
-function interact(){
-  const pick = scene.pick(scene.getEngine().getRenderWidth()/2, scene.getEngine().getRenderHeight()/2);
-  if(pick?.hit && pick.pickedMesh){
-    console.log("INTERACT:", pick.pickedMesh.name);
-    msg("INTERACT: " + pick.pickedMesh.name);
-  } else {
-    msg("INTERACT: nothing");
-  }
-}
-
-// --- Mobile pads (left = move, right = look) ---
 let moveVec = {x:0,y:0}; // x=strafe, y=forward
 let lookVec = {x:0,y:0}; // x=yaw, y=pitch
-let upHeld = false, downHeld=false;
+let upHeld=false, downHeld=false;
 
 function setupPad(padId, stickId, onMove){
   const pad = document.getElementById(padId);
   const stick = document.getElementById(stickId);
-  const r = ()=>pad.getBoundingClientRect();
-
-  let active = false, pid = null;
   const max = 55;
 
-  function setStick(dx,dy){
-    stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-  }
-  function end(){
-    active=false; pid=null;
-    setStick(0,0);
-    onMove(0,0);
-  }
+  let active=false, pid=null;
 
-  pad.addEventListener("pointerdown", (e)=>{
-    active=true; pid=e.pointerId;
-    pad.setPointerCapture(pid);
+  const setStick=(dx,dy)=>{
+    stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  };
+  const end=()=>{
+    active=false; pid=null; setStick(0,0); onMove(0,0);
+  };
+
+  pad.addEventListener("pointerdown",(e)=>{
+    active=true; pid=e.pointerId; pad.setPointerCapture(pid);
   });
 
-  pad.addEventListener("pointermove", (e)=>{
+  pad.addEventListener("pointermove",(e)=>{
     if(!active || e.pointerId!==pid) return;
-    const b = r();
+    const b = pad.getBoundingClientRect();
     const cx = b.left + b.width/2;
     const cy = b.top  + b.height/2;
     let dx = e.clientX - cx;
@@ -188,17 +225,14 @@ function setupPad(padId, stickId, onMove){
 }
 
 setupPad("leftPad","leftStick",(nx,ny)=>{
-  // forward is -ny because screen coords
   moveVec.x = nx;
-  moveVec.y = -ny;
+  moveVec.y = -ny; // invert screen Y
 });
-
 setupPad("rightPad","rightStick",(nx,ny)=>{
   lookVec.x = nx;
   lookVec.y = ny;
 });
 
-// Mobile buttons
 document.getElementById("bFly").onclick = toggleFlyWalk;
 document.getElementById("bReset").onclick = resetCam;
 document.getElementById("bUse").onclick = interact;
@@ -211,71 +245,12 @@ function hold(btnId, setter){
   b.addEventListener("pointercancel", off);
   b.addEventListener("pointerleave", off);
 }
-hold("bUp",(v)=>upHeld=v);
-hold("bDown",(v)=>downHeld=v);
+hold("bUp",   v=>upHeld=v);
+hold("bDown", v=>downHeld=v);
 
-// --- Auto-load ALL GLBs from /glb via GitHub API (no updates) ---
-function getOwnerRepo(){
-  const owner = location.hostname.split(".")[0];
-  const parts = location.pathname.split("/").filter(Boolean);
-  const repo = parts.length ? parts[0] : (owner + ".github.io");
-  return { owner, repo };
-}
-async function listGlbs(owner, repo){
-  const api = `https://api.github.com/repos/${owner}/${repo}/contents/glb`;
-  const r = await fetch(api, { headers:{ "Accept":"application/vnd.github+json" }});
-  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Create /glb folder in repo.`);
-  const items = await r.json();
-  return items
-    .filter(x=>x && x.type==="file" && /\.glb$/i.test(x.name))
-    .map(x=>({ name:x.name, url:x.download_url }));
-}
-async function tryLoadAvatar(glbs){
-  const a = glbs.find(x=>x.name.toLowerCase()==="avatar.glb");
-  if(!a) return;
-  try{
-    const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", a.url, scene);
-    res.meshes.forEach(m=>{
-      m.parent = cam;
-      m.position = new BABYLON.Vector3(0,-1.6,0);
-    });
-  }catch{}
-}
-async function loadAll(glbs){
-  const spacing = 90;
-  const cols = 4;
-  const baseY = 0;
-
-  await tryLoadAvatar(glbs);
-  const worlds = glbs.filter(g=>g.name.toLowerCase()!=="avatar.glb");
-  msg(`Found ${worlds.length} worlds. Loading…`);
-
-  let ok=0;
-  for(let i=0;i<worlds.length;i++){
-    const g = worlds[i];
-    const x = (i%cols)*spacing;
-    const z = Math.floor(i/cols)*spacing;
-
-    try{
-      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
-      res.meshes.forEach(m=>{
-        m.parent = root;
-        m.checkCollisions = true;
-        m.isPickable = true;
-      });
-      root.position.set(x, baseY, z);
-      ok++;
-      msg(`Loaded ${ok}/${worlds.length}: ${g.name}`);
-    }catch(e){
-      console.error("Failed GLB", g.name, e);
-      msg(`FAILED: ${g.name}`);
-    }
-  }
-  msg(`Ready. Loaded ${ok}/${worlds.length}. Fly between scenes.`);
-}
-
-// --- Frame loop: apply custom movement (desktop+mobile) ---
+/* ----------------------------
+   Movement + mobile look (each frame)
+----------------------------- */
 scene.onBeforeRenderObservable.add(()=>{
   const dt = engine.getDeltaTime()/1000;
 
@@ -283,18 +258,16 @@ scene.onBeforeRenderObservable.add(()=>{
   const sprint = keys.has("ControlLeft") || keys.has("ControlRight");
   const spd = (sprint ? baseSpeed*2.0 : baseSpeed);
 
-  // desktop keys -> movement
+  // desktop keys + mobile joystick
   let f=0,s=0,u=0;
   if(keys.has("KeyW")) f += 1;
   if(keys.has("KeyS")) f -= 1;
   if(keys.has("KeyD")) s += 1;
   if(keys.has("KeyA")) s -= 1;
 
-  // add mobile joystick
   f += moveVec.y;
   s += moveVec.x;
 
-  // vertical
   if(flyMode){
     if(keys.has("Space")) u += 1;
     if(keys.has("ShiftLeft") || keys.has("ShiftRight")) u -= 1;
@@ -302,7 +275,6 @@ scene.onBeforeRenderObservable.add(()=>{
     if(downHeld) u -= 1;
   }
 
-  // apply movement in camera space
   const forward = cam.getDirection(BABYLON.Axis.Z);
   const right   = cam.getDirection(BABYLON.Axis.X);
 
@@ -310,7 +282,7 @@ scene.onBeforeRenderObservable.add(()=>{
   if(move.lengthSquared() > 1e-6) move = move.normalize().scale(spd);
   const vert = new BABYLON.Vector3(0, u*spd, 0);
 
-  // moveWithCollisions gives nice behavior in walk mode too
+  // moveWithCollisions behaves well for both fly and walk
   cam.moveWithCollisions(move.add(vert).scale(dt*60));
 
   // mobile look
@@ -324,16 +296,133 @@ scene.onBeforeRenderObservable.add(()=>{
   }
 });
 
-// Boot
+/* ----------------------------
+   Auto-load ALL GLBs from /glb/ (NO updates)
+----------------------------- */
+function getOwnerRepo(){
+  // Project pages: https://OWNER.github.io/REPO/
+  // User pages:    https://OWNER.github.io/ (repo = OWNER.github.io)
+  const owner = location.hostname.split(".")[0];
+  const parts = location.pathname.split("/").filter(Boolean);
+  const repo = parts.length ? parts[0] : (owner + ".github.io");
+  return { owner, repo };
+}
+
+async function listGlbs(owner, repo){
+  const api = `https://api.github.com/repos/${owner}/${repo}/contents/glb`;
+  const r = await fetch(api, { headers:{ "Accept":"application/vnd.github+json" }});
+  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Make sure /glb exists in this repo.`);
+  const items = await r.json();
+  return items
+    .filter(x=>x && x.type==="file" && /\.glb$/i.test(x.name))
+    .map(x=>({ name:x.name, url:x.download_url }));
+}
+
+async function tryLoadAvatar(glbs){
+  const a = glbs.find(x=>x.name.toLowerCase()==="avatar.glb");
+  if(!a) return;
+  try{
+    const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", a.url, scene);
+    res.meshes.forEach(m=>{
+      m.parent = cam;
+      m.position = new BABYLON.Vector3(0,-1.6,0);
+      m.isPickable = false;
+    });
+  }catch(e){
+    console.warn("Avatar failed:", e);
+  }
+}
+
+// Camera spawn: OUTSIDE first world bounds (fixes black screen)
+function spawnCameraOutside(root){
+  const meshes = root.getChildMeshes(false).filter(m=>m.getTotalVertices && m.getTotalVertices()>0);
+  if(!meshes.length) return;
+
+  let min = new BABYLON.Vector3(+Infinity,+Infinity,+Infinity);
+  let max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
+
+  for(const m of meshes){
+    m.computeWorldMatrix(true);
+    const bi = m.getBoundingInfo();
+    const bmin = bi.boundingBox.minimumWorld;
+    const bmax = bi.boundingBox.maximumWorld;
+    min = BABYLON.Vector3.Minimize(min, bmin);
+    max = BABYLON.Vector3.Maximize(max, bmax);
+  }
+
+  const center = min.add(max).scale(0.5);
+  const radius = BABYLON.Vector3.Distance(min, max) * 0.5;
+
+  cam.position = center.add(new BABYLON.Vector3(0, radius*0.25, -radius*1.6));
+  cam.setTarget(center);
+}
+
+async function loadAll(glbs){
+  // layout in a big grid with whitespace
+  const spacing = 90;
+  const cols = 4;
+
+  await tryLoadAvatar(glbs);
+
+  const worlds = glbs
+    .filter(g=>g.name.toLowerCase()!=="avatar.glb")
+    .sort((a,b)=>a.name.localeCompare(b.name)); // stable order (use 01_, 02_ prefixes if you want)
+
+  if(worlds.length===0) throw new Error("No world .glb files found in /glb (only avatar.glb or empty).");
+
+  msg(`Found ${worlds.length} worlds. Loading…`);
+
+  let ok=0;
+  let cameraSpawned=false;
+
+  for(let i=0;i<worlds.length;i++){
+    const g = worlds[i];
+    const x = (i%cols)*spacing;
+    const z = Math.floor(i/cols)*spacing;
+
+    try{
+      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
+
+      // Import (loud failure on iOS)
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
+
+      res.meshes.forEach(m=>{
+        m.parent = root;
+        m.checkCollisions = true;
+        m.isPickable = true;
+      });
+
+      root.position.set(x, 0, z);
+
+      ok++;
+      msg(`Loaded ${ok}/${worlds.length}: ${g.name}`);
+
+      // spawn camera OUTSIDE first successful world
+      if(!cameraSpawned){
+        spawnCameraOutside(root);
+        cameraSpawned = true;
+      }
+    }catch(e){
+      console.error("Failed GLB:", g.name, e);
+      msg(`FAILED: ${g.name}\n${String(e && (e.message||e) || e)}`);
+    }
+  }
+
+  msg(`Ready. Loaded ${ok}/${worlds.length}. Fly between scenes.`);
+}
+
+/* ----------------------------
+   Boot
+----------------------------- */
 (async ()=>{
   try{
     const {owner, repo} = getOwnerRepo();
-    msg(`Repo: ${owner}/${repo} — listing /glb…`);
+    msg(`Repo: ${owner}/${repo}\nListing /glb…`);
     const glbs = await listGlbs(owner, repo);
     if(glbs.length===0) throw new Error("No .glb files found in /glb.");
     await loadAll(glbs);
   }catch(e){
-    msg(String(e.message || e));
+    msg(String(e && (e.message||e) || e));
   }
 })();
 
