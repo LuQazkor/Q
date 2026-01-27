@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Overwatch Viewer v26</title>
+<title>GLB Viewer v26.1</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
 
 <style>
@@ -10,21 +10,9 @@ html,body{
   margin:0;
   padding:0;
   overflow:hidden;
-  background:#022222;
+  background:#001f1f;
   touch-action:none;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont;
-}
-
-#hud{
-  position:absolute;
-  top:12px;
-  left:12px;
-  background:rgba(0,0,0,.75);
-  color:#fff;
-  padding:12px 14px;
-  border-radius:14px;
-  font-size:14px;
-  z-index:10;
+  font-family:system-ui;
 }
 
 #version{
@@ -32,11 +20,22 @@ html,body{
   top:12px;
   right:12px;
   background:#000;
-  color:#6ff;
+  color:#0ff;
   padding:8px 12px;
   border-radius:999px;
-  font-size:13px;
-  font-weight:700;
+  font-weight:800;
+  z-index:10;
+}
+
+#log{
+  position:absolute;
+  top:12px;
+  left:12px;
+  background:rgba(0,0,0,.8);
+  color:#0f0;
+  padding:10px;
+  border-radius:10px;
+  font-size:12px;
   z-index:10;
 }
 
@@ -47,22 +46,9 @@ html,body{
   background:#0ff;
   color:#000;
   padding:8px 12px;
-  border-radius:10px;
+  border-radius:8px;
   font-weight:700;
   cursor:pointer;
-  z-index:10;
-}
-
-#log{
-  position:absolute;
-  bottom:180px;
-  left:12px;
-  background:rgba(0,0,0,.7);
-  color:#0f0;
-  padding:8px 10px;
-  border-radius:10px;
-  font-size:12px;
-  max-width:60vw;
   z-index:10;
 }
 
@@ -72,8 +58,7 @@ html,body{
   width:140px;
   height:140px;
   border-radius:50%;
-  background:rgba(255,255,255,.1);
-  touch-action:none;
+  background:rgba(255,255,255,.12);
   z-index:10;
 }
 
@@ -88,21 +73,15 @@ html,body{
   height:60px;
   margin:-30px;
   border-radius:50%;
-  background:rgba(255,255,255,.45);
+  background:rgba(255,255,255,.5);
 }
 </style>
 </head>
 
 <body>
-<div id="hud">
-<b>FINAL HUMAN CONTROL MODEL</b><br/>
-👁 Look: drag screen<br/>
-🕹 Left: move | Right: strafe + lift
-</div>
-
-<div id="version">v26</div>
-<div id="upload">⬆ Upload GLB</div>
+<div id="version">v26.1</div>
 <div id="log">Booting…</div>
+<div id="upload">⬆ Upload GLB</div>
 
 <div id="joyL" class="joy"><div class="knob"></div></div>
 <div id="joyR" class="joy"><div class="knob"></div></div>
@@ -112,14 +91,10 @@ html,body{
 
 <script>
 const logEl=document.getElementById("log");
-function log(msg){
-  console.log(msg);
-  logEl.textContent=msg;
-}
+const log=m=>{ console.log(m); logEl.textContent=m; };
+log("v26.1 script running");
 
-log("v26 script loaded");
-
-/* -------------------- ENGINE -------------------- */
+/* ENGINE */
 const canvas=document.createElement("canvas");
 canvas.style.position="fixed";
 canvas.style.inset="0";
@@ -127,100 +102,84 @@ document.body.appendChild(canvas);
 
 const engine=new BABYLON.Engine(canvas,true);
 const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color4(0.02,0.25,0.25,1);
+scene.clearColor=new BABYLON.Color4(0,0.3,0.3,1);
 
-/* -------------------- CAMERA -------------------- */
+/* CAMERA + PLAYER */
+const player=new BABYLON.TransformNode("player",scene);
 const camera=new BABYLON.UniversalCamera(
-  "cam",new BABYLON.Vector3(0,4,-12),scene
+  "cam",new BABYLON.Vector3(0,3,-10),scene
 );
+camera.parent=player;
 camera.attachControl(canvas,false);
 scene.activeCamera=camera;
 
-/* -------------------- LIGHT -------------------- */
+/* LIGHT */
 new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene);
 
-/* -------------------- GRID (ALWAYS VISIBLE) -------------------- */
+/* GRID — ALWAYS */
 const grid=BABYLON.MeshBuilder.CreateGround(
-  "grid",{width:1000,height:1000},scene
+  "grid",{width:500,height:500},scene
 );
 const gm=new BABYLON.StandardMaterial("gm",scene);
 gm.wireframe=true;
 gm.emissiveColor=new BABYLON.Color3(0,1,1);
 grid.material=gm;
+log("Grid visible");
 
-log("Grid ready");
-
-/* -------------------- PLAYER -------------------- */
-const player=new BABYLON.TransformNode("player",scene);
-
-/* -------------------- JOYSTICKS -------------------- */
-function makeJoy(el){
-  const knob=el.querySelector(".knob");
-  let dx=0,dy=0,active=false;
-
-  el.addEventListener("pointerdown",e=>{
-    active=true;
-    el.setPointerCapture(e.pointerId);
-  });
-
-  el.addEventListener("pointermove",e=>{
-    if(!active) return;
+/* JOYSTICKS */
+function joy(el){
+  const k=el.querySelector(".knob");
+  let x=0,y=0,a=false;
+  el.onpointerdown=e=>{a=true;el.setPointerCapture(e.pointerId)};
+  el.onpointermove=e=>{
+    if(!a) return;
     const r=el.getBoundingClientRect();
-    dx=(e.clientX-(r.left+r.width/2))/(r.width/2);
-    dy=(e.clientY-(r.top+r.height/2))/(r.height/2);
-    dx=Math.max(-1,Math.min(1,dx));
-    dy=Math.max(-1,Math.min(1,dy));
-    knob.style.transform=`translate(${dx*40}px,${dy*40}px)`;
-  });
-
-  el.addEventListener("pointerup",()=>{
-    active=false; dx=dy=0;
-    knob.style.transform="";
-  });
-
-  return ()=>({x:dx,y:dy});
+    x=(e.clientX-(r.left+r.width/2))/(r.width/2);
+    y=(e.clientY-(r.top+r.height/2))/(r.height/2);
+    x=Math.max(-1,Math.min(1,x));
+    y=Math.max(-1,Math.min(1,y));
+    k.style.transform=`translate(${x*40}px,${y*40}px)`;
+  };
+  el.onpointerup=()=>{a=false;x=y=0;k.style.transform=""};
+  return ()=>({x,y});
 }
+const joyL=joy(joyL);
+const joyR=joy(joyR);
 
-const joyL=makeJoy(document.getElementById("joyL"));
-const joyR=makeJoy(document.getElementById("joyR"));
-
-/* -------------------- LOOK -------------------- */
-let lx=0,ly=0,looking=false;
-canvas.addEventListener("pointerdown",e=>{
+/* LOOK */
+let lx=0,ly=0,look=false;
+canvas.onpointerdown=e=>{
   if(e.target.closest(".joy")) return;
-  looking=true; lx=e.clientX; ly=e.clientY;
-});
-canvas.addEventListener("pointermove",e=>{
-  if(!looking) return;
+  look=true; lx=e.clientX; ly=e.clientY;
+};
+canvas.onpointermove=e=>{
+  if(!look) return;
   camera.rotation.y+=(e.clientX-lx)*0.002;
   camera.rotation.x+=(e.clientY-ly)*0.002;
-  camera.rotation.x=Math.max(-1.4,Math.min(1.4,camera.rotation.x));
   lx=e.clientX; ly=e.clientY;
-});
-canvas.addEventListener("pointerup",()=>looking=false);
+};
+canvas.onpointerup=()=>look=false;
 
-/* -------------------- UPLOAD (SAFE) -------------------- */
-document.getElementById("upload").onclick=()=>{
-  const input=document.createElement("input");
-  input.type="file";
-  input.accept=".glb";
-  input.onchange=async()=>{
-    const file=input.files[0];
-    if(!file) return;
-    log("Loading "+file.name);
-    const url=URL.createObjectURL(file);
+/* UPLOAD */
+upload.onclick=()=>{
+  const i=document.createElement("input");
+  i.type="file"; i.accept=".glb";
+  i.onchange=async()=>{
+    const f=i.files[0];
+    if(!f) return;
+    log("Loading "+f.name);
+    const url=URL.createObjectURL(f);
     const r=await BABYLON.SceneLoader.ImportMeshAsync(null,"",url,scene);
     r.meshes[0].position.set(0,0,20);
-    log("Loaded "+file.name);
+    log("Loaded "+f.name);
   };
-  input.click();
+  i.click();
 };
 
-/* -------------------- MOVEMENT -------------------- */
+/* LOOP */
 scene.onBeforeRenderObservable.add(()=>{
   const l=joyL(), r=joyR();
-  const speed=0.6;
-
+  const sp=0.5;
   const f=new BABYLON.Vector3(
     Math.sin(camera.rotation.y),0,
     Math.cos(camera.rotation.y)
@@ -229,17 +188,13 @@ scene.onBeforeRenderObservable.add(()=>{
     Math.sin(camera.rotation.y+Math.PI/2),0,
     Math.cos(camera.rotation.y+Math.PI/2)
   );
-
-  player.position.addInPlace(f.scale(-l.y*speed));
-  player.position.addInPlace(right.scale(l.x*speed));
-  player.position.y+=r.y*speed;
-  player.position.addInPlace(right.scale(r.x*speed));
+  player.position.addInPlace(f.scale(-l.y*sp));
+  player.position.addInPlace(right.scale(l.x*sp));
+  player.position.y+=r.y*sp;
+  player.position.addInPlace(right.scale(r.x*sp));
 });
 
-/* -------------------- LOOP -------------------- */
 engine.runRenderLoop(()=>scene.render());
-addEventListener("resize",()=>engine.resize());
-
 log("Engine running");
 </script>
 </body>
