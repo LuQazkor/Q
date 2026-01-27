@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>GLB World (all /glb)</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+#c{width:100%;height:100%;display:block;touch-action:none}
+#hud{
+  position:fixed;top:10px;left:10px;z-index:10;
+  font:13px system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+  color:#fff;background:rgba(0,0,0,.55);
+  padding:10px;border-radius:10px;max-width:calc(100vw - 20px)
+}
+#hud .small{opacity:.85;font-size:12px;margin-top:6px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div><b>Controls</b>: WASD move · Mouse look · Space up · Shift down · F fly/walk · Click interact</div>
+  <div class="small" id="msg">Booting…</div>
+</div>
+<canvas id="c"></canvas>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+<script>
+const canvas = document.getElementById("c");
+const engine = new BABYLON.Engine(canvas, true);
+const scene  = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0,0,0,1);
+scene.collisionsEnabled = true;
+
+const msgEl = document.getElementById("msg");
+const msg = (t)=>msgEl.textContent = t;
+
+// Light
+new BABYLON.HemisphericLight("h", new BABYLON.Vector3(0,1,0), scene);
+
+// Camera (fly by default for “whitespace travel”)
+let flyMode = true;
+const cam = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,2,-10), scene);
+cam.attachControl(canvas, true);
+cam.speed = 0.35;
+cam.angularSensibility = 3000;
+cam.checkCollisions = true;
+cam.ellipsoid = new BABYLON.Vector3(0.4,0.9,0.4);
+cam.applyGravity = !flyMode;
+
+cam.keysUp=[87]; cam.keysDown=[83]; cam.keysLeft=[65]; cam.keysRight=[68];
+
+// Fallback ground so walk mode never “falls”
+const ground = BABYLON.MeshBuilder.CreateGround("g",{width:2000,height:2000},scene);
+ground.isVisible = false;
+ground.checkCollisions = true;
+
+// Toggle fly/walk
+function toggleFlyWalk(){
+  flyMode = !flyMode;
+  cam.applyGravity = !flyMode;
+  msg(flyMode ? "Mode: FLY" : "Mode: WALK");
+}
+window.addEventListener("keydown", e=>{
+  if(e.key.toLowerCase()==="f") toggleFlyWalk();
+});
+
+// Interaction
+scene.onPointerObservable.add(ev=>{
+  if(ev.type === BABYLON.PointerEventTypes.POINTERPICK && ev.pickInfo.hit && ev.pickInfo.pickedMesh){
+    console.log("INTERACT:", ev.pickInfo.pickedMesh.name);
+    msg("INTERACT: " + ev.pickInfo.pickedMesh.name);
+  }
+});
+
+// --- Discover repo owner/repo from GitHub Pages URL ---
+function getOwnerRepo(){
+  // Project Pages: https://OWNER.github.io/REPO/...
+  // User Pages:    https://OWNER.github.io/  (repo is OWNER.github.io) — we also handle this
+  const host = location.hostname; // e.g. luqazkor.github.io
+  const owner = host.split(".")[0];
+  const parts = location.pathname.split("/").filter(Boolean); // ["REPO", ...] or []
+  const repo = parts.length ? parts[0] : (owner + ".github.io");
+  return { owner, repo };
+}
+
+// --- List all .glb in /glb using GitHub API ---
+async function listGlbs(owner, repo){
+  const api = `https://api.github.com/repos/${owner}/${repo}/contents/glb`;
+  const r = await fetch(api, { headers: { "Accept":"application/vnd.github+json" }});
+  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Is there a /glb folder in this repo?`);
+  const items = await r.json();
+  return items
+    .filter(x => x && x.type === "file" && /\.glb$/i.test(x.name))
+    .map(x => ({ name: x.name, url: x.download_url })); // direct raw file URL
+}
+
+// --- Optional avatar (visual only) ---
+async function tryLoadAvatar(glbs){
+  const a = glbs.find(x => x.name.toLowerCase() === "avatar.glb");
+  if(!a) return;
+  try{
+    const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", a.url, scene);
+    res.meshes.forEach(m=>{
+      m.parent = cam;
+      m.position = new BABYLON.Vector3(0,-1.6,0);
+    });
+  }catch(e){
+    // ignore avatar failures
+  }
+}
+
+// --- Load ALL glbs into one world, spaced out ---
+async function loadAll(glbs){
+  // Put each GLB in a grid with whitespace
+  const spacing = 80;        // meters between scenes (big whitespace)
+  const cols = 4;            // grid width
+  const baseY = 0;
+
+  let loaded = 0;
+  msg(`Found ${glbs.length} GLBs in /glb. Loading…`);
+
+  // Load avatar first if present (doesn't count as a “world”)
+  await tryLoadAvatar(glbs);
+
+  const worlds = glbs.filter(g => g.name.toLowerCase() !== "avatar.glb");
+  if(worlds.length === 0){
+    msg("No world GLBs found in /glb (only avatar.glb or empty).");
+    return;
+  }
+
+  for(let i=0;i<worlds.length;i++){
+    const g = worlds[i];
+    const x = (i % cols) * spacing;
+    const z = Math.floor(i / cols) * spacing;
+
+    try{
+      const root = new BABYLON.TransformNode("WORLD_" + g.name, scene);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
+
+      res.meshes.forEach(m=>{
+        if(m === scene.meshes[0]) return;
+        m.parent = root;
+        m.checkCollisions = true;
+        m.isPickable = true;
+      });
+
+      // Position whole imported world
+      root.position.set(x, baseY, z);
+
+      loaded++;
+      msg(`Loaded ${loaded}/${worlds.length}: ${g.name}`);
+    }catch(e){
+      msg(`FAILED: ${g.name}`);
+      console.error("Failed GLB:", g.name, e);
+    }
+  }
+
+  // Start near first world
+  cam.position.set(0, 2, -10);
+  msg(`Ready. Loaded ${loaded}/${worlds.length} worlds. Fly around the whitespace.`);
+}
+
+// Boot
+(async ()=>{
+  try{
+    const {owner, repo} = getOwnerRepo();
+    msg(`Repo: ${owner}/${repo}\nListing /glb via GitHub API…`);
+    const glbs = await listGlbs(owner, repo);
+    await loadAll(glbs);
+  }catch(e){
+    msg(String(e.message || e));
+  }
+})();
+
+engine.runRenderLoop(()=>scene.render());
+window.addEventListener("resize",()=>engine.resize());
+</script>
+</body>
+</html>
