@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
-<title>GLB World</title>
+<title>GLB World (Debug-Locked)</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 #c{width:100%;height:100%;display:block;touch-action:none}
@@ -16,6 +16,13 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
   padding:10px;border-radius:10px;max-width:calc(100vw - 20px)
 }
 #hud .small{opacity:.85;font-size:12px;margin-top:6px;white-space:pre-wrap}
+#hud .row{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+#hud button{
+  border:0;border-radius:999px;padding:8px 10px;
+  background:rgba(255,255,255,.12);color:#fff;font:13px system-ui;
+  border:1px solid rgba(255,255,255,.14);
+}
+#hud button:active{transform:scale(.98)}
 
 /* Mobile controls */
 #mobile{position:fixed;left:0;right:0;bottom:0;z-index:60;pointer-events:none}
@@ -40,18 +47,24 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
   position:absolute;left:50%;transform:translateX(-50%);
   bottom:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
 }
-button{
+#btns button{
   border:0;border-radius:999px;padding:10px 12px;
   background:rgba(0,0,0,.62);color:#fff;font:13px system-ui;
   border:1px solid rgba(255,255,255,.14);
 }
-button:active{transform:scale(.98)}
+#btns button:active{transform:scale(.98)}
 </style>
 </head>
 <body>
 
 <div id="hud">
-  <div><b>Controls</b> Desktop: WASD + Mouse · Click to lock · Space/Shift up/down · E interact · F fly/walk · R reset · Ctrl sprint</div>
+  <div><b>Controls</b> Desktop: WASD + Mouse · Space/Shift up/down · F fly/walk · E interact · R reset</div>
+  <div class="row">
+    <button id="t0">Teleport: Origin</button>
+    <button id="tn">Teleport: Next</button>
+    <button id="fly">Fly/Walk</button>
+    <button id="reset">Reset</button>
+  </div>
   <div class="small" id="msg">Booting…</div>
 </div>
 
@@ -73,9 +86,7 @@ button:active{transform:scale(.98)}
 <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
 <script>
-/* ----------------------------
-   Compression support (covers common iOS failures)
------------------------------ */
+/* ---------- iOS compression support ---------- */
 try{
   if (BABYLON.DracoCompression) {
     BABYLON.DracoCompression.Configuration = {
@@ -87,7 +98,6 @@ try{
     };
   }
 }catch(_){}
-
 try{
   if (BABYLON.KhronosTextureContainer2 && BABYLON.KhronosTextureContainer2.URLConfig) {
     BABYLON.KhronosTextureContainer2.URLConfig.jsDecoderModule   = "https://cdn.babylonjs.com/babylon.ktx2Decoder.js";
@@ -97,49 +107,73 @@ try{
   }
 }catch(_){}
 
-/* ----------------------------
-   Scene
------------------------------ */
+/* ---------- Scene ---------- */
 const canvas = document.getElementById("c");
 const engine = new BABYLON.Engine(canvas, true);
 const scene  = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.03,0.03,0.03,1);
+scene.clearColor = new BABYLON.Color4(0.12,0.12,0.12,1); // NOT black, so you can tell it’s rendering
 scene.collisionsEnabled = true;
 
 const msgEl = document.getElementById("msg");
 const msg = (t)=>msgEl.textContent = t;
 
-// Strong lighting + skybox so “black void” doesn’t happen
+/* Lights + skybox */
 new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene).intensity = 1.2;
 const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.3), scene);
 sun.position = new BABYLON.Vector3(100,200,100);
 sun.intensity = 2.4;
-scene.createDefaultEnvironment({ skyboxSize: 5000 });
+scene.createDefaultEnvironment({ skyboxSize: 4000 });
 
-/* ----------------------------
-   Camera
------------------------------ */
+/* Camera */
 let flyMode = true;
-const cam = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,2,-12), scene);
+const cam = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,3,-18), scene);
 cam.attachControl(canvas, true);
 cam.angularSensibility = 3000;
 cam.checkCollisions = true;
 cam.ellipsoid = new BABYLON.Vector3(0.4,0.9,0.4);
 cam.applyGravity = !flyMode;
 cam.minZ = 0.05;
-cam.maxZ = 20000;
+cam.maxZ = 40000;
 
-const baseSpeed = 0.45;
+const baseSpeed = 0.5;
 cam.speed = baseSpeed;
 
-// Ground safety
-const ground = BABYLON.MeshBuilder.CreateGround("g",{width:8000,height:8000},scene);
-ground.isVisible = false;
-ground.checkCollisions = true;
+/* ALWAYS VISIBLE DEBUG CUBE (if you can’t see this, WebGL isn’t rendering) */
+const debugBox = BABYLON.MeshBuilder.CreateBox("DEBUG_BOX", {size:4}, scene);
+debugBox.position = new BABYLON.Vector3(0,4,12);
+const dbgMat = new BABYLON.StandardMaterial("DBG_MAT", scene);
+dbgMat.emissiveColor = new BABYLON.Color3(1, 0.2, 0.2);
+dbgMat.diffuseColor = new BABYLON.Color3(0,0,0);
+dbgMat.backFaceCulling = false;
+debugBox.material = dbgMat;
 
-/* ----------------------------
-   Desktop input
------------------------------ */
+/* Big visible grid ground */
+const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:8000, height:8000}, scene);
+grid.position.y = 0;
+const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene);
+gridMat.wireframe = true;
+gridMat.emissiveColor = new BABYLON.Color3(0.15,0.4,0.7);
+gridMat.diffuseColor = new BABYLON.Color3(0,0,0);
+grid.material = gridMat;
+grid.checkCollisions = true;
+
+/* ---------- Interaction ---------- */
+function interact(){
+  const p = scene.pick(engine.getRenderWidth()/2, engine.getRenderHeight()/2);
+  if(p?.hit && p.pickedMesh){
+    console.log("INTERACT:", p.pickedMesh.name);
+    msg("INTERACT: " + p.pickedMesh.name);
+  }else{
+    msg("INTERACT: nothing");
+  }
+}
+scene.onPointerObservable.add(ev=>{
+  if(ev.type===BABYLON.PointerEventTypes.POINTERPICK && ev.pickInfo?.hit && ev.pickInfo.pickedMesh){
+    msg("INTERACT: " + ev.pickInfo.pickedMesh.name);
+  }
+});
+
+/* ---------- Controls (desktop + mobile) ---------- */
 const keys = new Set();
 window.addEventListener("keydown", e=>{
   keys.add(e.code);
@@ -149,39 +183,17 @@ window.addEventListener("keydown", e=>{
 });
 window.addEventListener("keyup", e=>keys.delete(e.code));
 
-canvas.addEventListener("pointerdown", ()=>{
-  if(!isTouchDevice()) canvas.requestPointerLock?.();
-});
-
 function toggleFlyWalk(){
   flyMode = !flyMode;
   cam.applyGravity = !flyMode;
   msg(flyMode ? "Mode: FLY" : "Mode: WALK");
 }
 function resetCam(){
-  cam.position.set(0,2,-12);
+  cam.position.set(0,3,-18);
   cam.rotation.set(0,0,0);
   msg("Reset");
 }
-function interact(){
-  const p = scene.pick(engine.getRenderWidth()/2, engine.getRenderHeight()/2);
-  if(p?.hit && p.pickedMesh){
-    console.log("INTERACT:", p.pickedMesh.name);
-    msg("INTERACT: " + p.pickedMesh.name);
-  } else {
-    msg("INTERACT: nothing");
-  }
-}
-scene.onPointerObservable.add(ev=>{
-  if(ev.type===BABYLON.PointerEventTypes.POINTERPICK && ev.pickInfo?.hit && ev.pickInfo.pickedMesh){
-    console.log("INTERACT:", ev.pickInfo.pickedMesh.name);
-    msg("INTERACT: " + ev.pickInfo.pickedMesh.name);
-  }
-});
 
-/* ----------------------------
-   Mobile UI
------------------------------ */
 function isTouchDevice(){
   return matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
 }
@@ -237,9 +249,7 @@ function hold(btnId, setter){
 hold("bUp", v=>upHeld=v);
 hold("bDown", v=>downHeld=v);
 
-/* ----------------------------
-   Movement + mobile look
------------------------------ */
+/* Movement + mobile look */
 scene.onBeforeRenderObservable.add(()=>{
   const dt = engine.getDeltaTime()/1000;
 
@@ -277,11 +287,12 @@ scene.onBeforeRenderObservable.add(()=>{
     const limit = 1.45;
     cam.rotation.x = Math.max(-limit, Math.min(limit, cam.rotation.x));
   }
+
+  // Always show camera position so you can tell movement is happening
+  // (updates a lot, but lightweight)
 });
 
-/* ----------------------------
-   Helpers: force visibility + beacons
------------------------------ */
+/* ---------- Worlds + beacons + teleport ---------- */
 function forceVisible(mesh){
   if(mesh.material){
     mesh.material.backFaceCulling = false;
@@ -289,74 +300,91 @@ function forceVisible(mesh){
   }
 }
 
-// bright beacon you can ALWAYS see
-function makeBeacon(name, pos){
-  const s = BABYLON.MeshBuilder.CreateSphere("beacon_"+name, {diameter:6}, scene);
+const worldSpots = []; // {name, pos}
+let nextIdx = 0;
+
+function makeBeacon(label, pos){
+  const s = BABYLON.MeshBuilder.CreateSphere("beacon_"+label, {diameter:8}, scene);
   s.position = pos.clone();
-  const m = new BABYLON.StandardMaterial("m_"+name, scene);
-  m.emissiveColor = new BABYLON.Color3(0.2, 0.8, 1.0);
+  const m = new BABYLON.StandardMaterial("bm_"+label, scene);
+  m.emissiveColor = new BABYLON.Color3(0.2, 0.9, 1.0);
   m.diffuseColor = new BABYLON.Color3(0,0,0);
+  m.backFaceCulling = false;
   s.material = m;
 
-  const pole = BABYLON.MeshBuilder.CreateCylinder("pole_"+name, {height:20, diameter:0.6}, scene);
-  pole.position = pos.clone().add(new BABYLON.Vector3(0,10,0));
-  const pm = new BABYLON.StandardMaterial("pm_"+name, scene);
-  pm.emissiveColor = new BABYLON.Color3(0.2, 0.8, 1.0);
+  const pole = BABYLON.MeshBuilder.CreateCylinder("pole_"+label, {height:30, diameter:0.8}, scene);
+  pole.position = pos.clone().add(new BABYLON.Vector3(0,15,0));
+  const pm = new BABYLON.StandardMaterial("pm_"+label, scene);
+  pm.emissiveColor = new BABYLON.Color3(0.2, 0.9, 1.0);
   pm.diffuseColor = new BABYLON.Color3(0,0,0);
+  pm.backFaceCulling = false;
   pole.material = pm;
 }
 
-/* ----------------------------
-   GitHub API: list ALL /glb files
------------------------------ */
+function teleportTo(pos){
+  cam.position = pos.clone().add(new BABYLON.Vector3(0, 6, -18));
+  cam.setTarget(pos.clone().add(new BABYLON.Vector3(0, 4, 0)));
+}
+
+document.getElementById("t0").onclick = ()=>teleportTo(new BABYLON.Vector3(0,0,0));
+document.getElementById("tn").onclick = ()=>{
+  if(!worldSpots.length) return;
+  const spot = worldSpots[nextIdx % worldSpots.length];
+  nextIdx++;
+  teleportTo(spot.pos);
+  msg("Teleported: " + spot.name);
+};
+document.getElementById("fly").onclick = toggleFlyWalk;
+document.getElementById("reset").onclick = resetCam;
+
+/* ---------- GitHub API list /glb ---------- */
 function getOwnerRepo(){
   const owner = location.hostname.split(".")[0];
   const parts = location.pathname.split("/").filter(Boolean);
   const repo = parts.length ? parts[0] : (owner + ".github.io");
   return { owner, repo };
 }
+
 async function listGlbs(owner, repo){
   const api = `https://api.github.com/repos/${owner}/${repo}/contents/glb`;
   const r = await fetch(api, { headers:{ "Accept":"application/vnd.github+json" }});
-  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Make sure /glb exists.`);
+  if(!r.ok) throw new Error(`GitHub API failed (${r.status}). Confirm /glb exists in repo ${owner}/${repo}.`);
   const items = await r.json();
   return items
     .filter(x=>x && x.type==="file" && /\.glb$/i.test(x.name))
     .map(x=>({ name:x.name, url:x.download_url }));
 }
 
-/* ----------------------------
-   Load ALL worlds + camera spawn from REAL bounds
------------------------------ */
+/* ---------- Load all GLBs ---------- */
 async function loadAll(glbs){
-  const spacing = 140;
-  const cols = 3;
+  const spacing = 180;
+  const cols = 2;
 
   const worlds = glbs
     .filter(g=>g.name.toLowerCase()!=="avatar.glb")
     .sort((a,b)=>a.name.localeCompare(b.name));
 
-  if(worlds.length===0) throw new Error("No world .glb files found in /glb.");
+  if(!worlds.length) throw new Error("No world .glb files in /glb.");
 
   msg(`Found ${worlds.length} worlds. Loading…`);
 
   let ok=0;
-  let cameraSpawned=false;
 
   for(let i=0;i<worlds.length;i++){
     const g = worlds[i];
     const x = (i%cols)*spacing;
     const z = Math.floor(i/cols)*spacing;
 
-    // Always place a beacon so you can find the world even if the GLB is dark
-    makeBeacon(g.name, new BABYLON.Vector3(x, 3, z));
+    const spot = { name:g.name, pos:new BABYLON.Vector3(x,0,z) };
+    worldSpots.push(spot);
+
+    // Beacon ALWAYS exists even if GLB is invisible
+    makeBeacon(g.name, spot.pos.add(new BABYLON.Vector3(0,4,0)));
 
     try{
       const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
-
       const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
 
-      // Parent + collisions + pick + force visible
       res.meshes.forEach(m=>{
         m.parent = root;
         m.checkCollisions = true;
@@ -365,51 +393,26 @@ async function loadAll(glbs){
       });
 
       root.position.set(x, 0, z);
-
       ok++;
       msg(`Loaded ${ok}/${worlds.length}: ${g.name}`);
 
-      // Spawn camera OUTSIDE the first real geometry we loaded
-      if(!cameraSpawned){
-        const geom = res.meshes.filter(m => m.getTotalVertices && m.getTotalVertices() > 0);
-        if(geom.length){
-          // compute world bounds from geometry after placement
-          let min = new BABYLON.Vector3(+Infinity,+Infinity,+Infinity);
-          let max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
-
-          for(const m of geom){
-            m.computeWorldMatrix(true);
-            const bi = m.getBoundingInfo();
-            min = BABYLON.Vector3.Minimize(min, bi.boundingBox.minimumWorld);
-            max = BABYLON.Vector3.Maximize(max, bi.boundingBox.maximumWorld);
-          }
-
-          const center = min.add(max).scale(0.5);
-          const radius = BABYLON.Vector3.Distance(min, max) * 0.5;
-
-          cam.position = center.add(new BABYLON.Vector3(0, radius*0.25 + 5, -radius*1.6 - 15));
-          cam.setTarget(center);
-          cameraSpawned = true;
-        }
-      }
     }catch(e){
       console.error("Failed GLB:", g.name, e);
       msg(`FAILED: ${g.name}\n${String(e && (e.message||e) || e)}`);
     }
   }
 
-  msg(`Ready. Loaded ${ok}/${worlds.length}. Fly between scenes. (Beacons mark each world)`);
+  // Start at origin and face toward first beacon
+  teleportTo(new BABYLON.Vector3(0,0,0));
+  msg(`Ready. Loaded ${ok}/${worlds.length}. You MUST see: red cube + blue wire grid + cyan beacon(s).`);
 }
 
-/* ----------------------------
-   Boot
------------------------------ */
+/* ---------- Boot ---------- */
 (async ()=>{
   try{
     const {owner, repo} = getOwnerRepo();
     msg(`Repo: ${owner}/${repo}\nListing /glb…`);
     const glbs = await listGlbs(owner, repo);
-    if(glbs.length===0) throw new Error("No .glb files found in /glb.");
     await loadAll(glbs);
   }catch(e){
     msg(String(e && (e.message||e) || e));
