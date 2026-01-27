@@ -1,262 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>GLB In-Browser Loader</title>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<meta charset="UTF-8" />
+<title>GLB World Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
 
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#0b3a3a;
-  touch-action:none;
-  font-family:system-ui;
+html,body { margin:0; padding:0; overflow:hidden; background:#000; font-family:sans-serif }
+#ui {
+  position:fixed; top:10px; left:10px; z-index:10;
+  background:rgba(0,0,0,.6); padding:10px; border-radius:8px; color:#fff
 }
-
-#hud{
-  position:absolute;
-  top:12px;
-  left:12px;
-  background:rgba(0,0,0,.6);
-  color:#fff;
-  padding:12px 14px;
-  border-radius:14px;
-  font-size:14px;
-  z-index:10;
+button { margin:4px 0; width:100% }
+select { width:100% }
+.joystick {
+  position:fixed; bottom:20px; width:120px; height:120px;
+  border-radius:50%; background:rgba(255,255,255,.1);
 }
-
-#upload{
-  position:absolute;
-  top:12px;
-  right:12px;
-  background:#000;
-  color:#6ff;
-  padding:10px 14px;
-  border-radius:12px;
-  font-size:13px;
-  cursor:pointer;
-  z-index:10;
-}
-
-.joy{
-  position:absolute;
-  bottom:24px;
-  width:140px;
-  height:140px;
-  border-radius:50%;
-  background:rgba(255,255,255,.08);
-  z-index:10;
-}
-#joyL{ left:24px; }
-#joyR{ right:24px; }
-
-.knob{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:60px;
-  height:60px;
-  margin:-30px;
-  border-radius:50%;
-  background:rgba(255,255,255,.35);
+#leftJoy { left:20px }
+#rightJoy { right:20px }
+.knob {
+  position:absolute; left:40px; top:40px;
+  width:40px; height:40px; border-radius:50%;
+  background:rgba(255,255,255,.4)
 }
 </style>
 </head>
-
 <body>
-<div id="hud">
-<b>IN-BROWSER GLB WORLD</b><br/>
-🕹 Left: move<br/>
-🕹 Right: fly + turn<br/>
-👆 Drag: look<br/>
-📂 Upload GLBs
+
+<div id="ui">
+  <input type="file" id="fileInput" multiple accept=".glb"/>
+  <button onclick="saveWorld()">💾 Save World</button>
+  <select id="worlds" onchange="loadWorld()"></select>
 </div>
 
-<label id="upload">
-Upload GLBs
-<input id="fileInput" type="file" accept=".glb" multiple hidden>
-</label>
+<div id="leftJoy" class="joystick"><div class="knob"></div></div>
+<div id="rightJoy" class="joystick"><div class="knob"></div></div>
 
-<div id="joyL" class="joy"><div class="knob"></div></div>
-<div id="joyR" class="joy"><div class="knob"></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js';
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
+let scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202020);
 
-<script>
-/* ================= ENGINE ================= */
-const canvas=document.createElement("canvas");
-canvas.style.position="fixed";
-canvas.style.top="0";
-canvas.style.left="0";
-canvas.style.width="100vw";
-canvas.style.height="100vh";
-document.body.appendChild(canvas);
+let camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 10000);
+camera.position.set(0,2,6);
 
-const engine=new BABYLON.Engine(canvas,true);
-engine.resize();
+let renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
 
-const scene=new BABYLON.Scene(engine);
-scene.clearColor=new BABYLON.Color4(0.05,0.2,0.2,1);
+let controls = new OrbitControls(camera, renderer.domElement);
+controls.enablePan = false;
+controls.enableZoom = false;
 
-/* ================= CAMERA ================= */
-const camera=new BABYLON.UniversalCamera(
-  "cam",
-  new BABYLON.Vector3(0,8,-20),
-  scene
+let light = new THREE.HemisphereLight(0xffffff,0x444444,1.2);
+scene.add(light);
+
+let ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(500,500),
+  new THREE.MeshStandardMaterial({color:0x333333})
 );
-scene.activeCamera=camera;
-camera.attachControl(canvas,false);
-camera.fov=0.8;
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
 
-/* ================= LIGHT ================= */
-new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene);
+let loader = new GLTFLoader();
+let objects = [];
+let avatar = null;
 
-/* ================= GRID ================= */
-const ground=BABYLON.MeshBuilder.CreateGround(
-  "g",{width:500,height:500},scene
-);
-const gm=new BABYLON.StandardMaterial("gm",scene);
-gm.wireframe=true;
-gm.emissiveColor=new BABYLON.Color3(0,1,1);
-ground.material=gm;
-
-/* ================= JOYSTICKS ================= */
-function makeJoy(el){
-  const knob=el.querySelector(".knob");
-  let x=0,y=0,active=false;
-
-  el.onpointerdown=e=>{
-    active=true;
-    el.setPointerCapture(e.pointerId);
-  };
-  el.onpointermove=e=>{
-    if(!active) return;
-    const r=el.getBoundingClientRect();
-    x=(e.clientX-(r.left+r.width/2))/(r.width/2);
-    y=(e.clientY-(r.top+r.height/2))/(r.height/2);
-    x=Math.max(-1,Math.min(1,x));
-    y=Math.max(-1,Math.min(1,y));
-    knob.style.transform=`translate(${x*40}px,${y*40}px)`;
-  };
-  el.onpointerup=()=>{
-    active=false; x=y=0;
-    knob.style.transform="";
-  };
-  return()=>({x,y});
+function normalize(model){
+  let box = new THREE.Box3().setFromObject(model);
+  let size = box.getSize(new THREE.Vector3()).length();
+  let scale = 2 / size;
+  model.scale.setScalar(scale);
 }
 
-const joyL=makeJoy(document.getElementById("joyL"));
-const joyR=makeJoy(document.getElementById("joyR"));
-
-/* ================= AVATAR ================= */
-const params=new URLSearchParams(location.search);
-const avatarURL=params.get("avatar");
-
-let avatar;
-let velocity=new BABYLON.Vector3();
-
-if(avatarURL){
-  BABYLON.SceneLoader.ImportMeshAsync(
-    null,"",avatarURL,scene
-  ).then(res=>{
-    avatar=res.meshes.find(m=>!m.parent)||res.meshes[0];
-    avatar.position.y=10;
-  });
-}
-
-/* ================= UPLOAD + LOAD ================= */
-let uploadedCount=0;
-
-document.getElementById("fileInput").onchange=e=>{
-  const files=[...e.target.files];
-  const spacing=14;
-  const cols=Math.ceil(Math.sqrt(files.length));
-
-  files.forEach((file,i)=>{
-    const url=URL.createObjectURL(file);
-
-    BABYLON.SceneLoader.ImportMeshAsync(
-      null,"",url,scene
-    ).then(res=>{
-      const root=res.meshes.find(m=>!m.parent)||res.meshes[0];
-
-      // normalize size
-      const box=root.getHierarchyBoundingVectors(true);
-      const size=box.max.subtract(box.min);
-      const maxDim=Math.max(size.x,size.y,size.z);
-      const scale=6/maxDim;
-      root.scaling.setAll(scale);
-
-      // spread grid
-      const idx=uploadedCount++;
-      const x=(idx%cols)*spacing - (cols*spacing)/2;
-      const z=Math.floor(idx/cols)*spacing - (cols*spacing)/2;
-      root.position.set(x,0,z);
+document.getElementById('fileInput').addEventListener('change', e=>{
+  [...e.target.files].forEach((file,i)=>{
+    let url = URL.createObjectURL(file);
+    loader.load(url, gltf=>{
+      let m = gltf.scene;
+      normalize(m);
+      m.position.set(i*4,0,0);
+      m.userData.file = file.name;
+      scene.add(m);
+      objects.push(m);
+      if(!avatar) avatar = m;
     });
   });
-};
-
-/* ================= CAMERA LOOK ================= */
-let looking=false,lastX=0,lastY=0;
-
-canvas.onpointerdown=e=>{
-  if(e.target.closest(".joy")) return;
-  looking=true; lastX=e.clientX; lastY=e.clientY;
-};
-
-canvas.onpointermove=e=>{
-  if(!looking) return;
-  camera.rotation.y+=(e.clientX-lastX)*0.005;
-  camera.rotation.x+=(e.clientY-lastY)*0.005;
-  lastX=e.clientX; lastY=e.clientY;
-};
-
-canvas.onpointerup=()=>looking=false;
-
-/* ================= LOOP ================= */
-scene.onBeforeRenderObservable.add(()=>{
-  if(!avatar) return;
-
-  const l=joyL();
-  const r=joyR();
-
-  avatar.rotation.y+=r.x*0.05;
-
-  const forward=new BABYLON.Vector3(
-    Math.sin(avatar.rotation.y),
-    0,
-    Math.cos(avatar.rotation.y)
-  );
-  const right=new BABYLON.Vector3(
-    Math.cos(avatar.rotation.y),
-    0,
-    -Math.sin(avatar.rotation.y)
-  );
-
-  velocity.copyFrom(
-    forward.scale(l.y*0.6)
-      .add(right.scale(l.x*0.6))
-  );
-  velocity.y=r.y*0.6;
-  avatar.position.addInPlace(velocity);
-
-  const camOffset=new BABYLON.Vector3(0,6,-16);
-  camOffset.rotateByQuaternionToRef(
-    BABYLON.Quaternion.FromEulerAngles(0,avatar.rotation.y,0),
-    camOffset
-  );
-  camera.position.copyFrom(avatar.position.add(camOffset));
-  camera.setTarget(avatar.position);
 });
 
-/* ================= RENDER ================= */
-engine.runRenderLoop(()=>scene.render());
-addEventListener("resize",()=>engine.resize());
+function saveWorld(){
+  let name = prompt("World name?");
+  if(!name) return;
+  let data = objects.map(o=>({
+    file:o.userData.file,
+    pos:o.position.toArray(),
+    rot:o.rotation.toArray(),
+    scale:o.scale.toArray()
+  }));
+  localStorage.setItem("world_"+name, JSON.stringify(data));
+  refreshWorlds();
+}
+
+function loadWorld(){
+  let name = worlds.value;
+  if(!name) return;
+  objects.forEach(o=>scene.remove(o));
+  objects.length = 0;
+
+  let data = JSON.parse(localStorage.getItem("world_"+name));
+  data.forEach((d,i)=>{
+    loader.load(URL.createObjectURL(
+      [...fileInput.files].find(f=>f.name===d.file)
+    ), gltf=>{
+      let m = gltf.scene;
+      m.position.fromArray(d.pos);
+      m.rotation.fromArray(d.rot);
+      m.scale.fromArray(d.scale);
+      m.userData.file = d.file;
+      scene.add(m);
+      objects.push(m);
+      if(!avatar) avatar = m;
+    });
+  });
+}
+
+function refreshWorlds(){
+  worlds.innerHTML = '<option value="">Load World</option>';
+  Object.keys(localStorage).filter(k=>k.startsWith("world_")).forEach(k=>{
+    let o=document.createElement('option');
+    o.value=k.replace("world_","");
+    o.textContent=o.value;
+    worlds.appendChild(o);
+  });
+}
+refreshWorlds();
+
+/* ---- JOYSTICKS ---- */
+function joystick(el, cb){
+  let knob = el.firstChild;
+  let active=false;
+  el.addEventListener('pointerdown',e=>active=true);
+  window.addEventListener('pointerup',e=>{
+    active=false;
+    knob.style.transform='';
+    cb(0,0);
+  });
+  window.addEventListener('pointermove',e=>{
+    if(!active) return;
+    let r=60;
+    let x=Math.max(-r,Math.min(r,e.movementX));
+    let y=Math.max(-r,Math.min(r,e.movementY));
+    knob.style.transform=`translate(${x}px,${y}px)`;
+    cb(x/r,y/r);
+  });
+}
+
+let move={x:0,z:0,y:0};
+joystick(leftJoy,(x,y)=>{ move.x=x; move.z=y; });
+joystick(rightJoy,(x,y)=>{ move.y=-y; move.x+=x*0.5; });
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(avatar){
+    avatar.position.x += move.x*0.1;
+    avatar.position.z += move.z*0.1;
+    avatar.position.y += move.y*0.1;
+    camera.position.lerp(
+      avatar.position.clone().add(new THREE.Vector3(0,2,6)),
+      0.1
+    );
+    camera.lookAt(avatar.position);
+  }
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
 </script>
 </body>
 </html>
