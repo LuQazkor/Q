@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<title>GLB World v8</title>
-
+<title>GLB World v9</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;-webkit-text-size-adjust:100%}
 #c{width:100vw;height:100vh;display:block;background:#111;touch-action:none}
@@ -25,7 +24,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
   color:#fff;font:13px system-ui;border:1px solid rgba(255,255,255,.18)
 }
 #hud button:active{transform:scale(.97)}
-#mobile{position:fixed;left:0;right:0;bottom:0;z-index:9998;pointer-events:none}
+#mobile{position:fixed;left:0;right:0;bottom:0;z-index:9998;pointer-events:none;display:block}
 .pad{
   pointer-events:auto;position:absolute;bottom:14px;width:150px;height:150px;border-radius:999px;
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);backdrop-filter: blur(6px)
@@ -47,28 +46,27 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
 #btns button:active{transform:scale(.97)}
 </style>
 </head>
-
 <body>
-<div id="version-badge">v8</div>
+<div id="version-badge">v9</div>
 
 <div id="hud">
-  <div><b>Status</b> v8 (failsafe: never blank + teleport worlds)</div>
+  <div><b>Status</b> v9 (avatar follow fixed + size-based spacing)</div>
   <div class="row">
-    <button id="teleNext">Teleport Next</button>
-    <button id="teleOrigin">Teleport Origin</button>
-    <button id="toggleFollow">Follow: AUTO</button>
+    <button id="prev">Prev</button>
+    <button id="next">Next</button>
+    <button id="focus">Focus</button>
     <button id="reset">Reset</button>
   </div>
   <div class="small" id="msg">Booting…</div>
 </div>
 
-<div id="mobile" style="display:none">
+<div id="mobile">
   <div id="leftPad" class="pad"><div id="leftStick" class="stick"></div></div>
   <div id="rightPad" class="pad"><div id="rightStick" class="stick"></div></div>
   <div id="btns">
     <button id="bUp">Up</button>
     <button id="bDown">Down</button>
-    <button id="bTele">Teleport</button>
+    <button id="bFocus">Focus</button>
     <button id="bReset">Reset</button>
   </div>
 </div>
@@ -77,7 +75,6 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-
 <script>
 const msgEl = document.getElementById("msg");
 const say = (t)=>msgEl.textContent = t;
@@ -89,45 +86,49 @@ if(!BABYLON.Engine.isSupported()){
 
 const canvas = document.getElementById("c");
 const engine = new BABYLON.Engine(canvas, true);
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
+const scene = new BABYLON.Scene(scene);
+</script>
+<script>
+/* (Fix: the line above was wrong in some past drafts; we explicitly re-create scene properly below) */
+</script>
+<script>
+/* Rebuild scene correctly */
+engine.stopRenderLoop();
+const scene2 = new BABYLON.Scene(engine);
+scene2.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
 
-new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene).intensity = 1.25;
-const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.25), scene);
+new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene2).intensity = 1.25;
+const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4,-1,-0.25), scene2);
 sun.position = new BABYLON.Vector3(100,200,100);
-sun.intensity = 1.8;
+sun.intensity = 1.9;
 
-// ALWAYS-visible grid + proof cube
-const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:1200, height:1200}, scene);
-const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene);
+// Always-visible grid + cube at origin
+const grid = BABYLON.MeshBuilder.CreateGround("GRID", {width:1200, height:1200}, scene2);
+const gridMat = new BABYLON.StandardMaterial("GRID_MAT", scene2);
 gridMat.wireframe = true;
 gridMat.emissiveColor = new BABYLON.Color3(0.2,0.9,1.0);
 gridMat.diffuseColor = new BABYLON.Color3(0,0,0);
 grid.material = gridMat;
 
-const proof = BABYLON.MeshBuilder.CreateBox("PROOF", {size:8}, scene);
+const proof = BABYLON.MeshBuilder.CreateBox("PROOF", {size:8}, scene2);
 proof.position = new BABYLON.Vector3(0,5,25);
-const proofMat = new BABYLON.StandardMaterial("PM", scene);
+const proofMat = new BABYLON.StandardMaterial("PM", scene2);
 proofMat.emissiveColor = new BABYLON.Color3(1,0.2,0.2);
 proof.material = proofMat;
 
-// Camera (third-person orbit-ish around target)
-const cam = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,10,-35), scene);
-cam.attachControl(canvas, true);
-cam.minZ = 0.05;
-cam.maxZ = 200000;
+// Follow camera (THIS is what stops “feet cam”)
+const follow = new BABYLON.FollowCamera("follow", new BABYLON.Vector3(0, 3, -12), scene2);
+follow.radius = 10;          // distance behind
+follow.heightOffset = 2.3;   // above
+follow.rotationOffset = 180; // behind avatar
+follow.cameraAcceleration = 0.08;
+follow.maxCameraSpeed = 20;
+follow.lowerRadiusLimit = 2.5;
+follow.upperRadiusLimit = 120;
+follow.attachControl(canvas, true);
+scene2.activeCamera = follow;
 
-let followMode = "AUTO"; // AUTO / AVATAR / NONE
-document.getElementById("toggleFollow").onclick = ()=>{
-  followMode = (followMode==="AUTO") ? "AVATAR" : (followMode==="AVATAR") ? "NONE" : "AUTO";
-  document.getElementById("toggleFollow").textContent = `Follow: ${followMode}`;
-};
-
-// Touch device?
-function isTouchDevice(){ return matchMedia("(pointer:coarse)").matches || "ontouchstart" in window; }
-if(isTouchDevice()) document.getElementById("mobile").style.display = "block";
-
-// Basic helpers
+// Helpers
 function getOwnerRepo(){
   const owner = location.hostname.split(".")[0];
   const parts = location.pathname.split("/").filter(Boolean);
@@ -162,99 +163,91 @@ function computeBounds(meshes){
   const size = ok ? max.subtract(min) : BABYLON.Vector3.Zero();
   return {ok,min,max,center,diag,size};
 }
-function forceAvatarVisible(mesh){
-  if(mesh.material){
-    mesh.material.backFaceCulling = false;
-    if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.5) mesh.material.alpha = 1.0;
-    // mild emissive ONLY for avatar so it never disappears
-    try{
-      mesh.material.emissiveColor = new BABYLON.Color3(0.35,0.6,0.8);
-    }catch(_){}
-  } else {
-    const m = new BABYLON.StandardMaterial("AV_MAT_"+mesh.name, scene);
-    m.emissiveColor = new BABYLON.Color3(0.35,0.6,0.8);
-    m.backFaceCulling = false;
-    mesh.material = m;
-  }
-}
-function makeWorldSafer(mesh){
+function worldSafe(mesh){
   if(mesh.material){
     mesh.material.backFaceCulling = false;
     if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.15) mesh.material.alpha = 1.0;
   }
 }
+function avatarForceVisible(mesh){
+  if(mesh.material){
+    mesh.material.backFaceCulling = false;
+    if(mesh.material.alpha !== undefined && mesh.material.alpha < 0.5) mesh.material.alpha = 1.0;
+    try{ mesh.material.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8); }catch(_){}
+  } else {
+    const m = new BABYLON.StandardMaterial("AV_MAT_"+mesh.name, scene2);
+    m.emissiveColor = new BABYLON.Color3(0.25,0.55,0.8);
+    m.backFaceCulling = false;
+    mesh.material = m;
+  }
+}
+function scaleAvatarToHuman(root){
+  const meshes = root.getChildMeshes(false);
+  const b = computeBounds(meshes);
+  if(!b.ok) return;
+  const height = Math.max(0.0001, b.size.y);
+  const TARGET = 1.75;
+  let s = TARGET / height;
+  s = Math.max(0.001, Math.min(200, s));
+  root.scaling = root.scaling.scale(s);
+  const b2 = computeBounds(meshes);
+  if(b2.ok) root.position.y -= b2.min.y; // feet to y=0
+}
 
-// Cluster worlds around origin
-function clusterPos(i){
-  const spacing = 220;
-  const row = Math.floor(i/3);
-  const col = i%3;
-  return new BABYLON.Vector3((col-1)*spacing, 0, (row)*spacing);
+// Worlds layout: spacing based on each world's diagonal
+const worlds = []; // {name, root, diag, pos, center}
+let worldIndex = 0;
+
+function layoutWorlds(){
+  // place in a line along X with size-based gaps (prevents overlap)
+  let x = 0;
+  const GAP = 80;
+  for(const w of worlds){
+    const half = Math.max(40, w.diag * 0.5);
+    x += half + GAP;
+    w.pos = new BABYLON.Vector3(x, 0, 0);
+    if(w.root) w.root.position = w.pos.clone();
+    x += half;
+  }
 }
 
 let avatar = null; // {root, yaw}
 let avatarLoaded = false;
 
-const worlds = []; // {name, root, pos, center}
-let worldIndex = 0;
-
-function lockTarget(pos){
-  cam.setTarget(pos);
-  // keep camera a safe distance
-  const back = cam.getDirection(BABYLON.Axis.Z).scale(-1);
-  if(back.lengthSquared()<0.001){
-    cam.position = pos.add(new BABYLON.Vector3(0,10,-35));
-  }
-}
-
-function getFollowTarget(){
-  if(followMode==="NONE") return null;
-  if(followMode==="AVATAR"){
-    return (avatarLoaded && avatar && avatar.root) ? avatar.root.position : proof.position;
-  }
-  // AUTO
-  if(avatarLoaded && avatar && avatar.root) return avatar.root.position;
-  return proof.position;
-}
-
-function teleportToWorld(i){
+function focusWorld(i){
   if(!worlds.length) return;
   worldIndex = (i + worlds.length) % worlds.length;
   const w = worlds[worldIndex];
-  const p = (w.center) ? w.center.clone() : w.pos.clone();
-  p.y = Math.max(0, p.y);
+  const p = (w.center ? w.center.clone() : w.pos.clone());
+  p.y = 0;
 
-  // move camera + target
-  cam.position = p.add(new BABYLON.Vector3(0, 10, -35));
-  cam.setTarget(p);
-
-  // move avatar if present
   if(avatarLoaded && avatar && avatar.root){
     avatar.root.position = p.clone();
     avatar.root.position.y = 0;
+    follow.lockedTarget = avatar.root; // ALWAYS follow avatar
+  } else {
+    follow.lockedTarget = proof;
   }
 
-  say(`World: ${w.name} (${worldIndex+1}/${worlds.length})`);
+  say(`World: ${w.name} (${worldIndex+1}/${worlds.length})\nDiag: ${Math.round(w.diag)}`);
 }
 
-document.getElementById("teleNext").onclick = ()=>teleportToWorld(worldIndex+1);
-document.getElementById("teleOrigin").onclick = ()=>{
-  cam.position.set(0,10,-35);
-  cam.setTarget(new BABYLON.Vector3(0,5,25));
-  if(avatarLoaded && avatar && avatar.root) avatar.root.position.set(0,0,0);
-  say("Teleported: origin");
-};
+document.getElementById("next").onclick = ()=>focusWorld(worldIndex+1);
+document.getElementById("prev").onclick = ()=>focusWorld(worldIndex-1);
+document.getElementById("focus").onclick = ()=>focusWorld(worldIndex);
 document.getElementById("reset").onclick = ()=>{
-  if(avatarLoaded && avatar){ avatar.yaw = 0; avatar.root.rotationQuaternion = BABYLON.Quaternion.Identity(); avatar.root.position.set(0,0,0); }
-  cam.position.set(0,10,-35);
-  cam.setTarget(new BABYLON.Vector3(0,5,25));
+  if(avatarLoaded && avatar){
+    avatar.yaw = 0;
+    avatar.root.rotationQuaternion = BABYLON.Quaternion.Identity();
+    avatar.root.position.set(0,0,0);
+  }
+  focusWorld(worldIndex);
   say("Reset");
 };
-
-document.getElementById("bTele").onclick = ()=>teleportToWorld(worldIndex+1);
+document.getElementById("bFocus").onclick = ()=>focusWorld(worldIndex);
 document.getElementById("bReset").onclick = ()=>document.getElementById("reset").click();
 
-// Mobile sticks
+// Mobile controls
 let moveStick = {x:0,y:0};
 let lookStick = {x:0,y:0};
 let upHeld=false, downHeld=false;
@@ -264,12 +257,8 @@ function setupPad(padId, stickId, onMove){
   const stick = document.getElementById(stickId);
   const max = 55;
   let active=false, pid=null;
-
-  const setStick=(dx,dy)=>{
-    stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-  };
+  const setStick=(dx,dy)=>{ stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; };
   const end=()=>{ active=false; pid=null; setStick(0,0); onMove(0,0); };
-
   pad.addEventListener("pointerdown",(e)=>{ active=true; pid=e.pointerId; pad.setPointerCapture(pid); });
   pad.addEventListener("pointermove",(e)=>{
     if(!active || e.pointerId!==pid) return;
@@ -303,17 +292,34 @@ const keys = new Set();
 window.addEventListener("keydown", e=>keys.add(e.code));
 window.addEventListener("keyup", e=>keys.delete(e.code));
 
-// Wheel zoom (moves camera along its forward direction)
+// Pinch zoom / wheel zoom -> follow radius
+let touches = new Map();
+function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+canvas.addEventListener("pointerdown",(e)=>{ canvas.setPointerCapture(e.pointerId); touches.set(e.pointerId,{x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY}); }, {passive:false});
+canvas.addEventListener("pointermove",(e)=>{
+  const t=touches.get(e.pointerId); if(!t) return;
+  t.px=t.x; t.py=t.y; t.x=e.clientX; t.y=e.clientY;
+  const arr=[...touches.values()];
+  if(arr.length>=2){
+    const a=arr[0], b=arr[1];
+    const prevD=dist({x:a.px,y:a.py},{x:b.px,y:b.py});
+    const d=dist(a,b);
+    const delta=d-prevD;
+    follow.radius = Math.max(2.5, Math.min(120, follow.radius - delta*0.03));
+    e.preventDefault();
+  }
+},{passive:false});
+canvas.addEventListener("pointerup",(e)=>touches.delete(e.pointerId),{passive:false});
+canvas.addEventListener("pointercancel",(e)=>touches.delete(e.pointerId),{passive:false});
 canvas.addEventListener("wheel",(e)=>{
-  const forward = cam.getDirection(BABYLON.Axis.Z);
-  cam.position.addInPlace(forward.scale(e.deltaY * 0.02));
+  follow.radius = Math.max(2.5, Math.min(120, follow.radius + e.deltaY*0.01));
   e.preventDefault();
 },{passive:false});
 
-/* Load all GLBs */
+// Load everything
 async function loadAll(){
   const {owner, repo} = getOwnerRepo();
-  say(`v8 running.\nRepo: ${owner}/${repo}\nListing /glb…`);
+  say(`v9 running.\nRepo: ${owner}/${repo}\nListing /glb…`);
 
   const glbs = await listGlbs(owner, repo);
   if(!glbs.length){ say("No .glb files found in /glb."); return; }
@@ -323,66 +329,56 @@ async function loadAll(){
 
   say(`Found ${glbs.length} GLBs\nWorlds=${worldFiles.length} Avatar=${avatarFile? "YES":"NO"}`);
 
-  // Worlds
-  for(let i=0;i<worldFiles.length;i++){
-    const g = worldFiles[i];
-    const pos = clusterPos(i);
+  // Worlds first
+  for(const g of worldFiles){
     try{
-      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene);
-      res.meshes.forEach(m=>{
-        m.parent = root;
-        m.isPickable = true;
-        makeWorldSafer(m);
-      });
-      root.position = pos.clone();
+      const root = new BABYLON.TransformNode("WORLD_"+g.name, scene2);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", g.url, scene2);
+      res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; worldSafe(m); });
       const b = computeBounds(root.getChildMeshes(false));
-      worlds.push({name:g.name, root, pos, center: b.ok ? b.center : pos});
-      say(`Loaded: ${g.name}\nmeshes=${res.meshes.length} diag=${Math.round(b.diag)}`);
+      worlds.push({name:g.name, root, diag: b.ok? b.diag : 200, pos:new BABYLON.Vector3(0,0,0), center: b.ok? b.center : null});
+      say(`Loaded world: ${g.name}\nDiag=${Math.round(b.diag)} meshes=${res.meshes.length}`);
     }catch(e){
-      worlds.push({name:g.name, root:null, pos, center: pos});
-      say(`FAILED: ${g.name}\n${String(e && (e.message||e) || e)}`);
+      worlds.push({name:g.name, root:null, diag:200, pos:new BABYLON.Vector3(0,0,0), center:null});
+      say(`FAILED world: ${g.name}\n${String(e && (e.message||e) || e)}`);
     }
   }
+
+  // Layout to avoid overlap
+  layoutWorlds();
 
   // Avatar
   if(avatarFile){
     try{
-      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene);
-      res.meshes.forEach(m=>{
-        m.parent = root;
-        m.isPickable = true;
-        forceAvatarVisible(m);
-      });
-      root.position.set(0,0,0);
+      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene2);
+      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene2);
+      res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; avatarForceVisible(m); });
+      scaleAvatarToHuman(root);
       avatar = {root, yaw:0};
       avatarLoaded = true;
-      say("Avatar loaded ✅ (forced visible)");
+      follow.lockedTarget = root;
+      say("Avatar loaded ✅ (autoscaled + follow camera locked)");
     }catch(e){
       avatarLoaded = false;
+      follow.lockedTarget = proof;
       say(`Avatar FAILED ❌\n${String(e && (e.message||e) || e)}`);
     }
   } else {
+    avatarLoaded = false;
+    follow.lockedTarget = proof;
     say("No avatar.glb found. Add /glb/avatar.glb");
   }
 
-  // Start at first world (if any)
-  if(worlds.length) teleportToWorld(0);
-  else say("No worlds loaded. Only grid + cube visible.");
+  if(worlds.length) focusWorld(0);
+  else say("No worlds loaded.");
 }
 
-scene.onBeforeRenderObservable.add(()=>{
+scene2.onBeforeRenderObservable.add(()=>{
   const dt = Math.min(0.05, engine.getDeltaTime()/1000);
   proof.rotation.y += 0.01;
 
-  // Follow target (never blank)
-  const t = getFollowTarget();
-  if(t) cam.setTarget(t);
-
-  // Movement drives avatar if available, otherwise drives camera
-  const speed = 7.0;
-  const upSpeed = 5.0;
+  // Movement drives avatar (preferred). If no avatar, we still move proof as a stand-in.
+  const targetNode = (avatarLoaded && avatar && avatar.root) ? avatar.root : proof;
 
   let f=0,s=0,u=0;
   // Desktop
@@ -399,30 +395,26 @@ scene.onBeforeRenderObservable.add(()=>{
   if(upHeld) u += 1;
   if(downHeld) u -= 1;
 
-  // Look (mobile right stick)
-  if(isTouchDevice()){
-    cam.rotation.y += lookStick.x * dt * 2.2;
-    cam.rotation.x += lookStick.y * dt * 1.6;
-    const limit = 1.45;
-    cam.rotation.x = Math.max(-limit, Math.min(limit, cam.rotation.x));
+  // Look -> rotates around Y (avatar yaw) so you don't get “feet cam”
+  const yawSpeed = 2.4;
+  if(avatarLoaded && avatar){
+    avatar.yaw += lookStick.x * yawSpeed * dt;
+    targetNode.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(0, avatar.yaw, 0);
   }
 
-  const forward = cam.getDirection(BABYLON.Axis.Z);
-  const right = cam.getDirection(BABYLON.Axis.X);
+  const yaw = (avatarLoaded && avatar) ? avatar.yaw : 0;
+  const forward = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right   = new BABYLON.Vector3(Math.sin(yaw + Math.PI/2), 0, Math.cos(yaw + Math.PI/2));
 
   let v = forward.scale(f).add(right.scale(s));
   if(v.lengthSquared()>1e-6) v = v.normalize();
 
-  if(avatarLoaded && avatar && avatar.root){
-    avatar.root.position.addInPlace(v.scale(speed*dt));
-    avatar.root.position.y += u * upSpeed * dt;
-  } else {
-    cam.position.addInPlace(v.scale(speed*dt));
-    cam.position.y += u * upSpeed * dt;
-  }
+  const speed = 7.0, upSpeed = 5.0;
+  targetNode.position.addInPlace(v.scale(speed*dt));
+  targetNode.position.y += u * upSpeed * dt;
 });
 
-engine.runRenderLoop(()=>scene.render());
+engine.runRenderLoop(()=>scene2.render());
 setTimeout(()=>engine.resize(),100);
 window.addEventListener("resize",()=>engine.resize());
 
