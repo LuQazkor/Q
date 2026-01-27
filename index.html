@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Babylon GLB World</title>
+<title>Babylon World</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
@@ -14,7 +14,7 @@ html, body {
     height: 100%;
     margin: 0;
     overflow: hidden;
-    background: #000;
+    background: black;
 }
 #ui {
     position: absolute;
@@ -29,8 +29,9 @@ html, body {
 
 <body>
 <div id="ui">
-    <input type="file" id="fileInput" accept=".glb,.gltf"><br>
-    WASD move · QE up/down · Drag = look
+    Avatar: <input type="file" id="avatarInput" accept=".glb,.gltf"><br>
+    World: <input type="file" id="worldInput" accept=".glb,.gltf"><br>
+    WASD move · QE fly · Drag look
 </div>
 
 <canvas id="renderCanvas"></canvas>
@@ -42,57 +43,82 @@ const engine = new BABYLON.Engine(canvas, true);
 const scene = new BABYLON.Scene(engine);
 scene.clearColor = new BABYLON.Color4(0,0,0,1);
 
+const light = new BABYLON.HemisphericLight("light",
+    new BABYLON.Vector3(0,1,0), scene);
+light.intensity = 1.2;
+
+// CAMERA (follows avatar)
 const camera = new BABYLON.UniversalCamera("cam",
-    new BABYLON.Vector3(0, 1.6, -5), scene);
+    new BABYLON.Vector3(0,1.6,-4), scene);
 camera.attachControl(canvas, true);
-camera.speed = 0.6;
-camera.angularSensibility = 4000;
+camera.speed = 0.4;
+camera.angularSensibility = 3500;
 camera.keysUp.push(87);
 camera.keysDown.push(83);
 camera.keysLeft.push(65);
 camera.keysRight.push(68);
-
-camera.keysUpward.push(69);   // Q/E vertical flight
+camera.keysUpward.push(69);
 camera.keysDownward.push(81);
 
-const light = new BABYLON.HemisphericLight("h",
-    new BABYLON.Vector3(0,1,0), scene);
-light.intensity = 1.2;
+let avatarRoot = null;
+let avatarMesh = null;
 
-let currentMeshes = [];
+function attachCameraToAvatar() {
+    if (!avatarMesh) return;
+    camera.parent = avatarMesh;
+    camera.position = new BABYLON.Vector3(0,1.6,-4);
+    camera.setTarget(avatarMesh.position);
+}
 
-function frameMeshes(meshes) {
+function centerAndScale(meshes) {
     const min = new BABYLON.Vector3(Infinity,Infinity,Infinity);
     const max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
 
     meshes.forEach(m=>{
-        if(!m.getBoundingInfo) return;
+        if (!m.getBoundingInfo) return;
         const b = m.getBoundingInfo().boundingBox;
         min.minimizeInPlace(b.minimumWorld);
         max.maximizeInPlace(b.maximumWorld);
     });
 
-    const center = min.add(max).scale(0.5);
     const size = max.subtract(min).length();
+    const center = min.add(max).scale(0.5);
 
-    camera.position = center.add(new BABYLON.Vector3(0, size * 0.2, -size));
-    camera.setTarget(center);
+    meshes.forEach(m=>{
+        m.position.subtractInPlace(center);
+        m.scaling.scaleInPlace(1 / size);
+    });
 }
 
-document.getElementById("fileInput").addEventListener("change", e=>{
+// AVATAR UPLOAD
+document.getElementById("avatarInput").addEventListener("change", e=>{
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
 
-    currentMeshes.forEach(m=>m.dispose());
-    currentMeshes = [];
+    if (avatarRoot) avatarRoot.dispose();
 
-    BABYLON.SceneLoader.LoadAsync(
-        "file:",
-        file,
-        scene
-    ).then(result=>{
-        currentMeshes = result.meshes;
-        frameMeshes(currentMeshes);
+    BABYLON.SceneLoader.LoadAssetContainerAsync("file:", file, scene)
+    .then(container=>{
+        avatarRoot = new BABYLON.TransformNode("avatarRoot", scene);
+        container.meshes.forEach(m=>{
+            m.parent = avatarRoot;
+        });
+        container.addAllToScene();
+        avatarMesh = container.meshes.find(m=>m.name !== "__root__");
+        centerAndScale(container.meshes);
+        attachCameraToAvatar();
+    });
+});
+
+// WORLD UPLOAD (PERSISTENT)
+document.getElementById("worldInput").addEventListener("change", e=>{
+    const file = e.target.files[0];
+    if (!file) return;
+
+    BABYLON.SceneLoader.LoadAssetContainerAsync("file:", file, scene)
+    .then(container=>{
+        container.addAllToScene();
+        centerAndScale(container.meshes);
     });
 });
 
