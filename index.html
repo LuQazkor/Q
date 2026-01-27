@@ -2,680 +2,719 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>GLB Grid v16</title>
+<title>GLB Grid v18</title>
 
 <style>
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#061f1f;touch-action:none;-webkit-text-size-adjust:100%}
-  #c{width:100vw;height:100vh;display:block;touch-action:none}
+html,body{
+  margin:0; width:100%; height:100%;
+  overflow:hidden; background:#062222;
+  touch-action:none;
+}
+canvas{display:block}
 
-  #badge{
-    position:fixed;top:10px;right:10px;z-index:9999;
-    padding:6px 10px;font:12px system-ui;color:#fff;
-    background:rgba(0,0,0,.82);
-    border:1px solid rgba(255,255,255,.28);
-    border-radius:999px;pointer-events:none
-  }
+#badge{
+  position:fixed; top:10px; right:10px;
+  padding:6px 10px; font:12px system-ui;
+  color:#fff; background:rgba(0,0,0,.82);
+  border-radius:999px; z-index:20;
+}
 
-  #hud{
-    position:fixed;top:10px;left:10px;z-index:9998;
-    font:13px system-ui;color:#fff;
-    background:rgba(0,0,0,.55);
-    border:1px solid rgba(255,255,255,.16);
-    padding:10px;border-radius:14px;
-    max-width:calc(100vw - 170px)
-  }
-  #hud .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  #hud button{
-    padding:10px 12px;border-radius:999px;
-    background:rgba(0,0,0,.72);
-    color:#fff;border:1px solid rgba(255,255,255,.18)
-  }
-  #hud .small{opacity:.9;font-size:12px;margin-top:8px;white-space:pre-wrap;line-height:1.25}
+#panel{
+  position:fixed; top:10px; left:10px;
+  background:rgba(0,0,0,.55);
+  color:#fff; font:13px system-ui;
+  padding:12px; border-radius:14px; z-index:20;
+  max-width:74vw;
+}
+#panel .row{ margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+#panel button{
+  padding:8px 12px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.7); color:#fff;
+}
+#panel .mono{ font:12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New"; opacity:.95; }
+#panel .dim{ opacity:.85; }
 
-  /* Mobile pads only really matter in FOLLOW mode */
-  .pad{
-    position:fixed;bottom:14px;width:150px;height:150px;border-radius:999px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.12);
-    z-index:9997;
-    pointer-events:auto;
-    user-select:none;
-    -webkit-user-select:none;
-  }
-  #left{left:14px}
-  #right{right:14px}
+#minimap{
+  position:fixed; right:10px; top:54px;
+  width:140px; height:90px;
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;
+  z-index:20;
+  overflow:hidden;
+}
+#minimap canvas{ width:100%; height:100%; }
 
-  .stick{
-    position:absolute;left:50%;top:50%;
-    width:64px;height:64px;margin:-32px;
-    border-radius:999px;
-    background:rgba(255,255,255,.23);
-    transform:translate(0,0);
-  }
+#sticks{
+  position:fixed; left:0; right:0; bottom:0;
+  height:44vh; max-height:360px;
+  pointer-events:none;
+  z-index:25;
+}
+.stick{
+  position:absolute;
+  width:44vw; max-width:260px;
+  height:44vw; max-height:260px;
+  border-radius:50%;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.10);
+  pointer-events:auto;
+}
+#leftStick{ left:16px; bottom:18px; }
+#rightStick{ right:16px; bottom:18px; }
 
-  .btnbar{
-    position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
-    display:flex;gap:10px;z-index:9997;
-    pointer-events:auto;
-    user-select:none;-webkit-user-select:none;
-  }
-  .btnbar button{
-    padding:12px 14px;border-radius:999px;
-    background:rgba(0,0,0,.75);color:#fff;
-    border:1px solid rgba(255,255,255,.18);
-    min-width:70px
-  }
+.knob{
+  position:absolute; left:50%; top:50%;
+  width:34%; height:34%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.18);
+}
 
-  /* Hide pads in OVERWATCH mode */
-  body.overwatch #left,
-  body.overwatch #right,
-  body.overwatch .btnbar{display:none;}
+#btnRow{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:16px;
+  display:flex; gap:10px; z-index:30;
+}
+#btnRow button{
+  pointer-events:auto;
+  padding:10px 14px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(0,0,0,.55);
+  color:#fff; font:13px system-ui;
+}
+
+@media (pointer:fine){
+  #sticks, #btnRow{ display:none; }
+}
 </style>
 </head>
 
-<body class="overwatch">
+<body>
 <canvas id="c"></canvas>
-<div id="badge"></div>
 
-<div id="hud">
-  <div><b>Status v16</b> (overwatch grid + normalized worlds + fixed mobile controls)</div>
+<div id="badge">v18</div>
+
+<div id="panel">
+  <div><b>Status v18</b> — overwatch grid + normalized + avatar flight + real sticks</div>
+  <div id="info" class="dim">loading…</div>
   <div class="row">
-    <button id="modeBtn">Mode: OVERWATCH</button>
-    <button id="prevBtn">Prev</button>
-    <button id="nextBtn">Next</button>
-    <button id="focusBtn">Focus</button>
-    <button id="resetBtn">Reset</button>
+    <button id="mode">Mode: OVERWATCH</button>
+    <button id="prev">Prev</button>
+    <button id="next">Next</button>
+    <button id="focus">Focus</button>
+    <button id="reset">Reset</button>
   </div>
-  <div id="info" class="small">booting…</div>
+  <div class="mono" id="stats"></div>
 </div>
 
-<div id="left" class="pad"><div class="stick"></div></div>
-<div id="right" class="pad"><div class="stick"></div></div>
+<div id="minimap"><canvas id="mm"></canvas></div>
 
-<div class="btnbar">
+<div id="sticks">
+  <div class="stick" id="leftStick"><div class="knob" id="leftKnob"></div></div>
+  <div class="stick" id="rightStick"><div class="knob" id="rightKnob"></div></div>
+</div>
+
+<div id="btnRow">
   <button id="upBtn">Up</button>
   <button id="downBtn">Down</button>
+  <button id="sprintBtn">Sprint</button>
 </div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
 
-/* ---------------- Version badge ---------------- */
-const VERSION = "v16";
-const BUILD = String(Date.now());
-document.getElementById('badge').textContent = `${VERSION} • ${BUILD}`;
+/* ---------------- BASIC SETUP ---------------- */
+const VERSION = 'v18';
+document.getElementById('badge').textContent = VERSION;
 
-/* ---------------- iOS Safari “wiggy zoom” killers ---------------- */
-document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
-document.addEventListener('gesturechange', e => e.preventDefault(), {passive:false});
-document.addEventListener('gestureend', e => e.preventDefault(), {passive:false});
-// Prevent double-tap zoom on buttons/pads
-let lastTouchEnd = 0;
-document.addEventListener('touchend', (e)=>{
-  const now = Date.now();
-  if(now - lastTouchEnd <= 300) e.preventDefault();
-  lastTouchEnd = now;
-},{passive:false});
-
-/* ---------------- Three setup ---------------- */
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(2, devicePixelRatio));
-renderer.setSize(innerWidth, innerHeight, false);
+renderer.setSize(innerWidth, innerHeight);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x061f1f);
+scene.background = new THREE.Color(0x062222);
 
-const cam = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 10000);
-
-const amb = new THREE.AmbientLight(0xffffff, 1.15);
-scene.add(amb);
-const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-sun.position.set(120, 220, 80);
-scene.add(sun);
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 8000);
 
 addEventListener('resize', ()=>{
-  cam.aspect = innerWidth/innerHeight;
-  cam.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
 });
 
-/* ---------------- Helpers ---------------- */
-const infoEl = document.getElementById('info');
-function logInfo(s){ infoEl.textContent = s; }
+/* iOS Safari: prevent page zoom/scroll */
+addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
 
-function classify(name){
-  const n = name.toLowerCase();
-  if(n.includes('avatar')) return 'avatar';
-  if(n.includes('icu') || n.includes('hospital') || n.includes('bed')) return 'medical';
-  if(n.includes('office') || n.includes('room') || n.includes('home')) return 'interior';
-  if(n.includes('city') || n.includes('street') || n.includes('pack')) return 'city';
-  if(n.includes('car') || n.includes('dodge') || n.includes('peugeot') || n.includes('vehicle')) return 'vehicle';
-  return 'misc';
-}
-function fileNameFromUrl(u){
-  try{ return decodeURIComponent(u.split('/').pop()); }catch{ return u.split('/').pop(); }
-}
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-function easeExpo(x){ // x in [-1..1], returns eased [-1..1]
-  const s = Math.sign(x);
-  const ax = Math.abs(x);
-  // soften center, still reaches 1
-  return s * (ax*ax*(3-2*ax));
-}
+/* ---------------- LIGHT + GRID ---------------- */
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+dir.position.set(80,140,60);
+scene.add(dir);
 
-/* ---------------- Discover GLBs from /glb/ ----------------
-   Works on GitHub Pages because /glb/ returns a directory listing HTML
-*/
-async function discoverGlbs(){
-  const base = new URL('./glb/', location.href).toString();
-  try{
-    const res = await fetch(base + `?t=${Date.now()}`, {cache:'no-store'});
-    const html = await res.text();
-    const a = document.createElement('a');
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    const links = [...tmp.querySelectorAll('a')].map(x=>x.getAttribute('href')||'');
-    const glbs = links
-      .filter(h=>h.toLowerCase().endsWith('.glb'))
-      .map(h=>{
-        // directory listing uses relative hrefs
-        if(h.startsWith('http')) return h;
-        return new URL(h, base).toString();
-      });
-    // De-dupe
-    return [...new Set(glbs)];
-  }catch(e){
-    return [];
-  }
-}
+const grid = new THREE.GridHelper(800, 80, 0x33ffff, 0x116666);
+scene.add(grid);
 
-/* ---------------- Load + normalize ---------------- */
+/* ---------------- GLB LIST ----------------
+   Put your worlds in /glb and list them here. */
+const GLBS = [
+  './glb/ICU.glb',
+  './glb/office.glb',
+  './glb/city_pack_8.glb',
+  './glb/1970_dodge_challenger_rt.glb',
+  './glb/dumbledores_office_2.glb'
+];
+
+/* Avatar file (optional). Put this at: /glb/avatar.glb */
+const AVATAR_URL = './glb/avatar.glb';
+
+/* ---------------- LOAD + NORMALIZE ---------------- */
 const loader = new GLTFLoader();
 
-const worlds = [];           // {name,url,obj,category}
-let avatar = null;           // THREE.Object3D
-let currentIndex = 0;
+const items = []; // {obj, name, key, center, diag, row, col}
+let current = 0;
 
-const TARGET_WORLD_DIAM = 22;     // normalized “display size”
-const GRID_CELL = 42;             // spacing between grid cells
-const GROUP_GAP_ROWS = 2;         // blank rows between category blocks
-
-function normalizeToDiameter(obj, targetDiam){
+function boxInfo(obj){
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
-  const diam = size.length();
-  if(!isFinite(diam) || diam <= 0) return {scale:1, diam:0};
-  const s = targetDiam / diam;
-  obj.scale.multiplyScalar(s);
-  return {scale:s, diam};
+  const center = box.getCenter(new THREE.Vector3());
+  const diag = size.length();
+  return {box,size,center,diag};
 }
 
-function centerToGround(obj){
-  // shift so lowest point hits y=0 and center xz
-  const box = new THREE.Box3().setFromObject(obj);
-  const c = box.getCenter(new THREE.Vector3());
-  const min = box.min;
-  obj.position.x -= c.x;
-  obj.position.z -= c.z;
-  obj.position.y -= min.y;
+function normalizeTo(obj, targetDiag=40){
+  const {box,diag} = boxInfo(obj);
+  if(!isFinite(diag) || diag<=0) return {diag:0};
+
+  const s = targetDiag / diag;
+  obj.scale.setScalar(s);
+
+  // Recompute and ground to y=0, center to origin.
+  const b2 = new THREE.Box3().setFromObject(obj);
+  const c2 = b2.getCenter(new THREE.Vector3());
+  obj.position.sub(c2);
+  obj.position.y -= b2.min.y;
+
+  const b3 = new THREE.Box3().setFromObject(obj);
+  const size3 = b3.getSize(new THREE.Vector3());
+  const diag3 = size3.length();
+  const center3 = b3.getCenter(new THREE.Vector3());
+  return {diag:diag3, center:center3};
 }
 
-function placeOnGrid(items){
-  // group by category, then place each category into its own grid block
-  const byCat = {};
-  for(const it of items){
-    (byCat[it.category] ||= []).push(it);
-  }
-  const catOrder = ['medical','interior','city','vehicle','misc'];
-  let row = 0;
-  for(const cat of catOrder){
-    const arr = byCat[cat] || [];
-    if(!arr.length) continue;
+function groupKey(name){
+  const n = name.toLowerCase();
+  if(n.includes('icu') || n.includes('hospital') || n.includes('bed')) return 'medical';
+  if(n.includes('office') || n.includes('desk')) return 'office';
+  if(n.includes('city') || n.includes('street') || n.includes('town')) return 'city';
+  if(n.includes('car') || n.includes('dodge') || n.includes('peugeot') || n.includes('vehicle')) return 'vehicle';
+  if(n.includes('room') || n.includes('home') || n.includes('house')) return 'room';
+  return 'misc';
+}
 
-    // sort by name so stable
-    arr.sort((a,b)=>a.name.localeCompare(b.name));
+async function loadWorlds(){
+  for(const url of GLBS){
+    try{
+      const gltf = await loader.loadAsync(url);
+      const obj = gltf.scene;
+      const name = decodeURIComponent(url.split('/').pop());
+      const key = groupKey(name);
 
-    // block width: 6 columns
-    const cols = 6;
-    for(let i=0;i<arr.length;i++){
-      const r = Math.floor(i/cols);
-      const c = i%cols;
-      arr[i].obj.position.set(
-        c*GRID_CELL,
-        0,
-        (row + r)*GRID_CELL
-      );
+      const norm = normalizeTo(obj, 44); // HARD normalized
+      items.push({obj,name,key,diag:norm.diag});
+
+      scene.add(obj);
+    }catch(e){
+      // keep going
     }
-    row += Math.ceil(arr.length/cols) + GROUP_GAP_ROWS;
+  }
+}
+
+/* ---------------- GRID LAYOUT (cluster by key) ---------------- */
+function layoutGrid(){
+  // cluster groups in blocks, still grid-like
+  const by = new Map();
+  for(const it of items){
+    if(!by.has(it.key)) by.set(it.key, []);
+    by.get(it.key).push(it);
+  }
+  const order = ['medical','office','city','vehicle','room','misc'];
+  const groups = [];
+  for(const k of order){
+    if(by.has(k)) groups.push({k, arr: by.get(k)});
+  }
+  // any leftover keys
+  for(const [k,arr] of by.entries()){
+    if(!order.includes(k)) groups.push({k,arr});
   }
 
-  // after placement, recentre whole grid near origin
+  const gap = 120;     // consistent spacing now that worlds are normalized
+  const cols = 4;
+
+  let index = 0;
+  for(const g of groups){
+    for(const it of g.arr){
+      const r = Math.floor(index/cols);
+      const c = index % cols;
+      it.obj.position.x = (c - (cols-1)/2) * gap;
+      it.obj.position.z = r * gap;
+      index++;
+    }
+    // spacer row between groups
+    index += cols; // jump one full row
+  }
+
+  // grid helper large enough
+  grid.scale.setScalar(1);
+}
+
+/* ---------------- CAMERA MODES ---------------- */
+let MODE = 'OVERWATCH'; // OVERWATCH | FOLLOW
+const infoEl = document.getElementById('info');
+const statsEl = document.getElementById('stats');
+
+function resetOverwatch(){
+  MODE = 'OVERWATCH';
+  document.getElementById('mode').textContent = 'Mode: OVERWATCH';
+  // Aim at center of all worlds
+  const center = new THREE.Vector3();
+  if(items.length){
+    const b = new THREE.Box3();
+    items.forEach(it=>b.expandByObject(it.obj));
+    b.getCenter(center);
+  }
+  camera.position.set(center.x + 300, 420, center.z + 300);
+  camera.lookAt(center);
+}
+
+function focusWorld(i){
+  if(!items.length) return;
+  current = (i + items.length) % items.length;
+  const p = items[current].obj.position.clone();
+  // Overwatch focus: closer but still above
+  camera.position.set(p.x + 120, 160, p.z + 120);
+  camera.lookAt(p);
+  uiUpdate();
+}
+
+function setFollowMode(){
+  MODE = 'FOLLOW';
+  document.getElementById('mode').textContent = 'Mode: FOLLOW';
+  uiUpdate();
+}
+
+function uiUpdate(){
+  if(!items.length){
+    infoEl.textContent = 'No worlds loaded. Check GLB list + /glb paths.';
+    statsEl.textContent = '';
+    return;
+  }
+  infoEl.textContent = `World ${current+1}/${items.length}: ${items[current].name}  | group=${items[current].key}`;
+  statsEl.textContent =
+    `worldDiag=${Math.round(items[current].diag||0)}\n` +
+    `avatar=${avatar ? 'YES' : 'NO'}  mode=${MODE}\n` +
+    `tip: tap minimap dots to focus`;
+}
+
+/* ---------------- AVATAR ---------------- */
+let avatar = null;
+let avatarRoot = new THREE.Group();
+scene.add(avatarRoot);
+
+function makeFallbackAvatar(){
+  const g = new THREE.CapsuleGeometry(6, 18, 6, 12);
+  const m = new THREE.MeshStandardMaterial({color:0x99ddff});
+  const mesh = new THREE.Mesh(g,m);
+  mesh.position.y = 18;
   const group = new THREE.Group();
-  for(const it of items) group.add(it.obj);
-  scene.add(group);
-
-  const box = new THREE.Box3().setFromObject(group);
-  const c = box.getCenter(new THREE.Vector3());
-  group.position.x -= c.x;
-  group.position.z -= c.z;
-
+  group.add(mesh);
   return group;
 }
 
-/* ---------------- Camera modes ---------------- */
-let mode = "OVERWATCH"; // OVERWATCH | FOLLOW
-const modeBtn = document.getElementById('modeBtn');
+async function loadAvatar(){
+  try{
+    const gltf = await loader.loadAsync(AVATAR_URL);
+    avatar = gltf.scene;
+  }catch(e){
+    avatar = makeFallbackAvatar();
+  }
+  // normalize avatar to human-ish size
+  normalizeTo(avatar, 30);
+  avatarRoot.add(avatar);
 
-function setMode(m){
-  mode = m;
-  if(mode === "OVERWATCH"){
-    document.body.classList.add('overwatch');
-    modeBtn.textContent = "Mode: OVERWATCH";
-    // high vantage that sees the grid
-    resetOverwatchCam(true);
-  }else{
-    document.body.classList.remove('overwatch');
-    modeBtn.textContent = "Mode: FOLLOW";
-    // put camera behind avatar if exists, else keep current
-    if(avatar){
-      followYaw = 0;
-      followPitch = -0.25;
-      // start behind and above
-      followDist = 14;
-    }
-    // ensure we are not inside geometry
-    recenterFollow();
+  // start at current world
+  if(items.length){
+    const p = items[current].obj.position.clone();
+    avatarRoot.position.set(p.x, 0, p.z);
   }
 }
 
-modeBtn.onclick = ()=> setMode(mode==="OVERWATCH" ? "FOLLOW" : "OVERWATCH");
+/* ---------------- FOLLOW CAMERA + MOVEMENT ---------------- */
+const tmpV = new THREE.Vector3();
+let yaw = 0, pitch = -0.25;
 
-/* Overwatch cam: orbit-like top view */
-let owYaw = 0;
-let owPitch = -0.95;    // looking down
-let owDist = 180;
-let owTarget = new THREE.Vector3(0,0,0);
+function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-function resetOverwatchCam(hard=false){
-  if(hard){
-    owYaw = 0;
-    owPitch = -0.98;
-    owDist = 220;
-    owTarget.set(0,0,0);
+function updateFollowCamera(dt){
+  if(!avatarRoot) return;
+
+  // Desired camera behind avatar based on yaw/pitch
+  const back = 90;
+  const up = 55;
+
+  const dir = new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(pitch),
+    Math.sin(pitch),
+    Math.cos(yaw) * Math.cos(pitch)
+  ).normalize();
+
+  const camPos = avatarRoot.position.clone()
+    .add(new THREE.Vector3(0, up, 0))
+    .add(dir.clone().multiplyScalar(-back));
+
+  camera.position.lerp(camPos, 1 - Math.pow(0.0001, dt)); // stable smoothing
+  camera.lookAt(avatarRoot.position.clone().add(new THREE.Vector3(0, 28, 0)));
+}
+
+let moveX = 0, moveZ = 0; // strafe, forward
+let flyY = 0;            // up/down
+let sprintHeld = false;
+
+function updateMovement(dt){
+  if(MODE !== 'FOLLOW') return;
+
+  // YOU SAID: left stick sluggish -> increase 5x.
+  // So baseline is already fast, sprint is fastest.
+  const baseSpeed = 140;      // was "too slow" -> big bump
+  const sprintMult = 2.2;     // sprint faster
+  const speed = baseSpeed * (sprintHeld ? sprintMult : 1);
+
+  // Movement relative to yaw
+  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+  const right = new THREE.Vector3(forward.z, 0, -forward.x).normalize();
+
+  const v = new THREE.Vector3()
+    .addScaledVector(right, moveX)
+    .addScaledVector(forward, moveZ);
+
+  if(v.lengthSq() > 1e-6) v.normalize();
+
+  avatarRoot.position.addScaledVector(v, speed * dt);
+  avatarRoot.position.y += flyY * (speed * 0.7) * dt;
+
+  // keep avatar above "floor"
+  avatarRoot.position.y = Math.max(0, avatarRoot.position.y);
+
+  // face travel direction
+  if(v.lengthSq() > 1e-6){
+    avatarRoot.rotation.y = yaw;
   }
-  const cp = new THREE.Vector3(
-    Math.cos(owYaw)*Math.cos(owPitch),
-    Math.sin(owPitch),
-    Math.sin(owYaw)*Math.cos(owPitch)
-  ).multiplyScalar(owDist).add(owTarget);
-  cam.position.copy(cp);
-  cam.lookAt(owTarget);
 }
 
-/* Follow cam: third-person behind avatar */
-let followYaw = 0;        // yaw around avatar
-let followPitch = -0.25;  // slightly down
-let followDist = 14;
+/* ---------------- INPUT: DESKTOP ---------------- */
+const keys = new Set();
+addEventListener('keydown', (e)=>{ keys.add(e.code); });
+addEventListener('keyup', (e)=>{ keys.delete(e.code); });
 
-function recenterFollow(){
-  if(!avatar) return;
-  // keep camera outside avatar
-  const p = avatar.position.clone();
-  const dir = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
-  const camPos = p.clone()
-    .addScaledVector(dir, -followDist)
-    .add(new THREE.Vector3(0, followDist*0.55, 0));
-  cam.position.copy(camPos);
-  cam.lookAt(p.clone().add(new THREE.Vector3(0, 3, 0)));
+let pointerLocked = false;
+canvas.addEventListener('click', ()=>{
+  if(matchMedia('(pointer:fine)').matches){
+    canvas.requestPointerLock?.();
+  }
+});
+document.addEventListener('pointerlockchange', ()=>{
+  pointerLocked = (document.pointerLockElement === canvas);
+});
+
+document.addEventListener('mousemove', (e)=>{
+  if(!pointerLocked) return;
+  const sens = 0.0022; // sane
+  yaw -= e.movementX * sens;
+  pitch -= e.movementY * sens;
+  pitch = clamp(pitch, -1.2, 0.3);
+});
+
+function updateDesktopKeys(){
+  // WASD in FOLLOW only
+  if(MODE !== 'FOLLOW') return;
+
+  const f = (keys.has('KeyW') ? 1 : 0) + (keys.has('KeyS') ? -1 : 0);
+  const s = (keys.has('KeyD') ? 1 : 0) + (keys.has('KeyA') ? -1 : 0);
+  moveZ = clamp(f, -1, 1);
+  moveX = clamp(s, -1, 1);
+
+  flyY = (keys.has('Space') ? 1 : 0) + (keys.has('ShiftLeft') || keys.has('ShiftRight') ? -1 : 0);
+  sprintHeld = keys.has('ControlLeft') || keys.has('ControlRight');
 }
 
-/* ---------------- Mobile controls (FOLLOW mode) ----------------
-   Left stick: MOVE (FAST) – this is the SLOWEST speed already (no sprint).
-   Right stick: LOOK ONLY, smoothed and less reactive.
-*/
-const leftPad = document.getElementById('left');
-const rightPad = document.getElementById('right');
+/* ---------------- INPUT: MOBILE STICKS (RIGHT STICK LOOK ONLY) ---------------- */
+function makeStick(elStick, elKnob, onMove){
+  let activeId = null;
+  let cx=0, cy=0;
+  let maxR = 0;
 
-let moveX = 0, moveY = 0;   // left stick (x=strafe, y=fwd/back)
-let lookX = 0, lookY = 0;   // right stick (x=yaw, y=pitch)
-let upHeld = false, downHeld = false;
+  function setKnob(dx,dy){
+    elKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  }
+  function reset(){
+    activeId = null;
+    setKnob(0,0);
+    onMove(0,0, false);
+  }
 
-// speed: base already fast, and you asked “increase 5x”
-const MOVE_SPEED = 0.85;      // per-frame feel; tuned to be fast on iPhone
-const VERTICAL_SPEED = 0.65;  // up/down speed
-const LOOK_SENS = 0.045;      // smaller = less reactive
-const LOOK_SMOOTH = 0.18;     // higher = smoother (less twitch)
+  elStick.addEventListener('pointerdown', (e)=>{
+    activeId = e.pointerId;
+    elStick.setPointerCapture(activeId);
+    const r = elStick.getBoundingClientRect();
+    cx = r.left + r.width/2;
+    cy = r.top + r.height/2;
+    maxR = Math.min(r.width, r.height) * 0.35;
+    e.preventDefault();
+  }, {passive:false});
 
-// deadzone + easing to avoid “janky”
-function applyStick(dx, dy){
-  const dz = 0.08;
-  let x = Math.abs(dx) < dz ? 0 : dx;
-  let y = Math.abs(dy) < dz ? 0 : dy;
-  // ease curve for finesse
-  x = easeExpo(x);
-  y = easeExpo(y);
-  return [x,y];
-}
+  elStick.addEventListener('pointermove', (e)=>{
+    if(e.pointerId !== activeId) return;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const len = Math.hypot(dx,dy);
+    const k = len > maxR ? (maxR/len) : 1;
+    const sx = dx * k;
+    const sy = dy * k;
+    setKnob(sx, sy);
 
-function bindPad(el, onMove){
-  const stick = el.querySelector('.stick');
-  let pid = null;
-  el.addEventListener('pointerdown', e=>{
-    pid = e.pointerId;
-    el.setPointerCapture(pid);
+    const nx = clamp(sx / maxR, -1, 1);
+    const ny = clamp(sy / maxR, -1, 1);
+    onMove(nx, ny, true);
+    e.preventDefault();
+  }, {passive:false});
+
+  elStick.addEventListener('pointerup', (e)=>{
+    if(e.pointerId !== activeId) return;
+    reset();
+    e.preventDefault();
+  }, {passive:false});
+
+  elStick.addEventListener('pointercancel', (e)=>{
+    if(e.pointerId !== activeId) return;
+    reset();
   });
-  el.addEventListener('pointermove', e=>{
-    if(e.pointerId !== pid) return;
-    const r = el.getBoundingClientRect();
-    const dx = (e.clientX-(r.left+r.width/2))/(r.width/2);
-    const dy = (e.clientY-(r.top+r.height/2))/(r.height/2);
-    const clx = clamp(dx, -1, 1);
-    const cly = clamp(dy, -1, 1);
-    const [x,y] = applyStick(clx, cly);
-    onMove(x,y);
-    stick.style.transform = `translate(${clx*42}px,${cly*42}px)`;
-  });
-  const end = ()=>{
-    pid = null;
-    onMove(0,0);
-    stick.style.transform = `translate(0,0)`;
-  };
-  el.addEventListener('pointerup', end);
-  el.addEventListener('pointercancel', end);
+
+  return {reset};
 }
 
-bindPad(leftPad, (x,y)=>{ moveX = x; moveY = y; });
-bindPad(rightPad,(x,y)=>{ lookX = x; lookY = y; });
+const leftStick = makeStick(
+  document.getElementById('leftStick'),
+  document.getElementById('leftKnob'),
+  (x,y,active)=>{
+    // Left stick = MOVE ONLY.
+    // y is down positive -> invert for forward
+    moveX = x;           // strafe
+    moveZ = -y;          // forward
+  }
+);
 
+const rightStick = makeStick(
+  document.getElementById('rightStick'),
+  document.getElementById('rightKnob'),
+  (x,y,active)=>{
+    // Right stick = LOOK ONLY. No one-finger drag duplication.
+    const lookSens = 1.9;   // you said right was too reactive -> lower
+    yaw -= x * lookSens * 0.035;
+    pitch -= y * lookSens * 0.025;
+    pitch = clamp(pitch, -1.2, 0.3);
+  }
+);
+
+// Buttons: up/down/sprint
 const upBtn = document.getElementById('upBtn');
 const downBtn = document.getElementById('downBtn');
+const sprintBtn = document.getElementById('sprintBtn');
 
-function bindHold(btn, setter){
-  btn.addEventListener('pointerdown', e=>{ e.preventDefault(); setter(true); btn.setPointerCapture(e.pointerId); });
-  btn.addEventListener('pointerup', e=>{ e.preventDefault(); setter(false); });
-  btn.addEventListener('pointercancel', e=>{ e.preventDefault(); setter(false); });
-}
-bindHold(upBtn, v=>upHeld=v);
-bindHold(downBtn,v=>downHeld=v);
-
-/* ---------------- Desktop keyboard (optional) ---------------- */
-const keys = {};
-addEventListener('keydown', e=>keys[e.key.toLowerCase()] = true);
-addEventListener('keyup', e=>keys[e.key.toLowerCase()] = false);
-
-/* ---------------- UI buttons ---------------- */
-document.getElementById('prevBtn').onclick = ()=>{ currentIndex = (currentIndex-1+worlds.length)%worlds.length; focusCurrent(); };
-document.getElementById('nextBtn').onclick = ()=>{ currentIndex = (currentIndex+1)%worlds.length; focusCurrent(); };
-document.getElementById('focusBtn').onclick = ()=>{ focusCurrent(true); };
-document.getElementById('resetBtn').onclick = ()=>{ if(mode==="OVERWATCH") resetOverwatchCam(true); else recenterFollow(); };
-
-function focusCurrent(forceOverwatch=false){
-  if(!worlds.length) return;
-  const w = worlds[currentIndex];
-  const p = w.obj.getWorldPosition(new THREE.Vector3());
-  if(mode==="OVERWATCH" || forceOverwatch){
-    owTarget.copy(p);
-    // zoom to the selected world
-    owDist = 120;
-    resetOverwatchCam(false);
-  }else{
-    // in FOLLOW, teleport avatar near selected world
-    if(avatar){
-      avatar.position.set(p.x, 6, p.z + 10);
-      recenterFollow();
-    }
-  }
-  updateInfo();
+function holdBtn(el, onDown, onUp){
+  el.addEventListener('pointerdown', (e)=>{ onDown(); e.preventDefault(); }, {passive:false});
+  el.addEventListener('pointerup', (e)=>{ onUp(); e.preventDefault(); }, {passive:false});
+  el.addEventListener('pointercancel', ()=>onUp());
+  el.addEventListener('pointerleave', ()=>onUp());
 }
 
-function updateInfo(extra=""){
-  const worldName = worlds[currentIndex]?.name || "(none)";
-  const counts = `World ${currentIndex+1}/${worlds.length}`;
-  const m = (mode==="OVERWATCH")
-    ? "OVERWATCH: pinch=zoom • 1-finger=orbit • 2-finger=pan"
-    : "FOLLOW: left=move (FAST) • right=look (smooth) • Up/Down";
-  logInfo(`${counts}\n${m}\nCurrent: ${worldName}${extra?`\n${extra}`:""}`);
+holdBtn(upBtn, ()=>{ flyY = 1; }, ()=>{ if(flyY===1) flyY=0; });
+holdBtn(downBtn, ()=>{ flyY = -1; }, ()=>{ if(flyY===-1) flyY=0; });
+holdBtn(sprintBtn, ()=>{ sprintHeld = true; }, ()=>{ sprintHeld = false; });
+
+/* Disable one-finger drag look entirely on mobile */
+addEventListener('pointermove', (e)=>{
+  if(matchMedia('(pointer:fine)').matches) return;
+  // do nothing; sticks control look
+}, {passive:false});
+
+/* ---------------- MINIMAP (tap dot to focus) ---------------- */
+const mm = document.getElementById('mm');
+const mmr = mm.getContext('2d');
+
+function sizeMinimap(){
+  const r = mm.getBoundingClientRect();
+  mm.width = Math.max(1, Math.floor(r.width * devicePixelRatio));
+  mm.height = Math.max(1, Math.floor(r.height * devicePixelRatio));
+}
+addEventListener('resize', sizeMinimap);
+sizeMinimap();
+
+function drawMinimap(){
+  const w = mm.width, h = mm.height;
+  mmr.clearRect(0,0,w,h);
+  mmr.fillStyle = 'rgba(0,0,0,0)';
+  mmr.fillRect(0,0,w,h);
+
+  if(!items.length) return;
+
+  // compute bounds of world positions
+  let minX=Infinity, maxX=-Infinity, minZ=Infinity, maxZ=-Infinity;
+  for(const it of items){
+    minX = Math.min(minX, it.obj.position.x);
+    maxX = Math.max(maxX, it.obj.position.x);
+    minZ = Math.min(minZ, it.obj.position.z);
+    maxZ = Math.max(maxZ, it.obj.position.z);
+  }
+  // include avatar
+  minX = Math.min(minX, avatarRoot.position.x);
+  maxX = Math.max(maxX, avatarRoot.position.x);
+  minZ = Math.min(minZ, avatarRoot.position.z);
+  maxZ = Math.max(maxZ, avatarRoot.position.z);
+
+  const pad = 40;
+  minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+
+  const sx = (x)=> ( (x - minX) / (maxX-minX) ) * (w-18) + 9;
+  const sz = (z)=> ( (z - minZ) / (maxZ-minZ) ) * (h-18) + 9;
+
+  // worlds
+  for(let i=0;i<items.length;i++){
+    const it = items[i];
+    const x = sx(it.obj.position.x);
+    const y = sz(it.obj.position.z);
+
+    mmr.beginPath();
+    mmr.arc(x,y, 5*devicePixelRatio, 0, Math.PI*2);
+
+    if(i===current) mmr.fillStyle = 'rgba(255,80,80,.95)';
+    else mmr.fillStyle = 'rgba(255,255,255,.70)';
+    mmr.fill();
+  }
+
+  // avatar
+  mmr.beginPath();
+  mmr.arc(sx(avatarRoot.position.x), sz(avatarRoot.position.z), 4*devicePixelRatio, 0, Math.PI*2);
+  mmr.fillStyle = 'rgba(70,220,255,.95)';
+  mmr.fill();
 }
 
-/* ---------------- Overwatch touch gestures ---------------- */
-let touch1 = null, touch2 = null;
-let lastPinchDist = 0;
+mm.addEventListener('pointerdown', (e)=>{
+  const r = mm.getBoundingClientRect();
+  const x = (e.clientX - r.left) * devicePixelRatio;
+  const y = (e.clientY - r.top) * devicePixelRatio;
 
-function getTouches(e){
-  // using pointer events is messy for pinch; just use Touch events on canvas
-  return e.touches ? [...e.touches] : [];
+  // brute: find nearest dot in current minimap draw space
+  if(!items.length) return;
+
+  // recompute bounds matching drawMinimap()
+  let minX=Infinity, maxX=-Infinity, minZ=Infinity, maxZ=-Infinity;
+  for(const it of items){
+    minX = Math.min(minX, it.obj.position.x);
+    maxX = Math.max(maxX, it.obj.position.x);
+    minZ = Math.min(minZ, it.obj.position.z);
+    maxZ = Math.max(maxZ, it.obj.position.z);
+  }
+  minX = Math.min(minX, avatarRoot.position.x);
+  maxX = Math.max(maxX, avatarRoot.position.x);
+  minZ = Math.min(minZ, avatarRoot.position.z);
+  maxZ = Math.max(maxZ, avatarRoot.position.z);
+
+  const pad = 40;
+  minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+
+  const sx = (xx)=> ( (xx - minX) / (maxX-minX) ) * (mm.width-18) + 9;
+  const sz = (zz)=> ( (zz - minZ) / (maxZ-minZ) ) * (mm.height-18) + 9;
+
+  let best = 0, bestD = Infinity;
+  for(let i=0;i<items.length;i++){
+    const it = items[i];
+    const dx = x - sx(it.obj.position.x);
+    const dy = y - sz(it.obj.position.z);
+    const d = dx*dx + dy*dy;
+    if(d < bestD){ bestD = d; best = i; }
+  }
+
+  // tap radius threshold
+  if(bestD < (18*devicePixelRatio)*(18*devicePixelRatio)){
+    current = best;
+    // teleport avatar to that world and follow it
+    const p = items[current].obj.position;
+    avatarRoot.position.set(p.x, 0, p.z);
+    setFollowMode();
+    uiUpdate();
+  }
+}, {passive:false});
+
+/* ---------------- UI BUTTONS ---------------- */
+document.getElementById('prev').onclick = ()=>{
+  current = (current - 1 + items.length) % items.length;
+  focusWorld(current);
+};
+document.getElementById('next').onclick = ()=>{
+  current = (current + 1) % items.length;
+  focusWorld(current);
+};
+document.getElementById('focus').onclick = ()=>{
+  if(!items.length) return;
+  // Teleport avatar to current and enter follow
+  const p = items[current].obj.position;
+  avatarRoot.position.set(p.x, 0, p.z);
+  setFollowMode();
+};
+document.getElementById('reset').onclick = ()=>{
+  leftStick.reset(); rightStick.reset();
+  moveX=moveZ=0; flyY=0; sprintHeld=false;
+  resetOverwatch();
+  uiUpdate();
+};
+document.getElementById('mode').onclick = ()=>{
+  if(MODE === 'OVERWATCH') setFollowMode();
+  else resetOverwatch();
+  uiUpdate();
+};
+
+/* ---------------- BOOT ---------------- */
+resetOverwatch();
+
+await loadWorlds();
+layoutGrid();
+await loadAvatar();
+
+resetOverwatch();
+uiUpdate();
+
+/* ---------------- LOOP ---------------- */
+let last = performance.now();
+function loop(t){
+  const dt = Math.min(0.05, (t-last)/1000);
+  last = t;
+
+  updateDesktopKeys();
+  updateMovement(dt);
+  if(MODE === 'FOLLOW') updateFollowCamera(dt);
+
+  drawMinimap();
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
 }
-
-canvas.addEventListener('touchstart', (e)=>{
-  if(mode !== "OVERWATCH") return;
-  e.preventDefault();
-  const t = getTouches(e);
-  if(t.length===1){
-    touch1 = {x:t[0].clientX, y:t[0].clientY};
-  }else if(t.length>=2){
-    touch1 = {x:t[0].clientX, y:t[0].clientY};
-    touch2 = {x:t[1].clientX, y:t[1].clientY};
-    lastPinchDist = Math.hypot(touch1.x-touch2.x, touch1.y-touch2.y);
-  }
-},{passive:false});
-
-canvas.addEventListener('touchmove', (e)=>{
-  if(mode !== "OVERWATCH") return;
-  e.preventDefault();
-  const t = getTouches(e);
-
-  if(t.length===1 && touch1){
-    const dx = (t[0].clientX - touch1.x);
-    const dy = (t[0].clientY - touch1.y);
-    touch1.x = t[0].clientX; touch1.y = t[0].clientY;
-
-    owYaw -= dx * 0.005;
-    owPitch -= dy * 0.005;
-    owPitch = clamp(owPitch, -1.45, -0.25); // keep looking down
-    resetOverwatchCam(false);
-  }
-
-  if(t.length>=2){
-    const a = {x:t[0].clientX, y:t[0].clientY};
-    const b = {x:t[1].clientX, y:t[1].clientY};
-    const d = Math.hypot(a.x-b.x, a.y-b.y);
-
-    // pinch zoom
-    const dd = d - lastPinchDist;
-    lastPinchDist = d;
-    owDist *= (1 - dd * 0.0025);
-    owDist = clamp(owDist, 60, 900);
-
-    // 2-finger pan: move target based on midpoint delta
-    const mx = (a.x+b.x)/2;
-    const my = (a.y+b.y)/2;
-    if(touch1 && touch2){
-      const pmx = (touch1.x+touch2.x)/2;
-      const pmy = (touch1.y+touch2.y)/2;
-      const pdx = mx - pmx;
-      const pdy = my - pmy;
-
-      // pan in camera plane
-      const right = new THREE.Vector3(1,0,0).applyQuaternion(cam.quaternion);
-      const forward = new THREE.Vector3(0,0,1).applyQuaternion(cam.quaternion);
-      right.y=0; forward.y=0; right.normalize(); forward.normalize();
-
-      const panScale = owDist * 0.002;
-      owTarget.addScaledVector(right, -pdx*panScale);
-      owTarget.addScaledVector(forward,  pdy*panScale);
-    }
-    touch1 = a; touch2 = b;
-
-    resetOverwatchCam(false);
-  }
-},{passive:false});
-
-canvas.addEventListener('touchend', (e)=>{
-  if(mode !== "OVERWATCH") return;
-  e.preventDefault();
-  const t = getTouches(e);
-  if(t.length===0){ touch1=null; touch2=null; }
-},{passive:false});
-
-/* ---------------- Load everything ---------------- */
-(async function boot(){
-  logInfo("booting… discovering /glb/*.glb");
-  const glbs = await discoverGlbs();
-
-  if(!glbs.length){
-    logInfo("No GLBs found in /glb/. Put files into /glb/ then refresh.");
-    // still show camera
-    resetOverwatchCam(true);
-    return;
-  }
-
-  // pick avatar as first file with 'avatar' in name (or none)
-  const avatarUrl = glbs.find(u => fileNameFromUrl(u).toLowerCase().includes('avatar')) || null;
-  const worldUrls = glbs.filter(u => u !== avatarUrl);
-
-  logInfo(`Found ${glbs.length} GLBs\nWorlds=${worldUrls.length} Avatar=${avatarUrl? "YES":"NO"}\nLoading…`);
-
-  // Load avatar
-  if(avatarUrl){
-    try{
-      const g = await loader.loadAsync(avatarUrl);
-      avatar = g.scene;
-      avatar.name = "avatar";
-      centerToGround(avatar);
-      normalizeToDiameter(avatar, 10); // keep avatar reasonable
-      avatar.position.set(0, 6, 0);
-      scene.add(avatar);
-    }catch(e){
-      avatar = null;
-    }
-  }
-
-  // Load worlds
-  const loaded = [];
-  for(const url of worldUrls){
-    try{
-      const g = await loader.loadAsync(url);
-      const obj = g.scene;
-      obj.name = fileNameFromUrl(url);
-      centerToGround(obj);
-
-      // Normalize world display size so they don't overlap
-      normalizeToDiameter(obj, TARGET_WORLD_DIAM);
-
-      const item = {
-        name: obj.name,
-        url,
-        obj,
-        category: classify(obj.name)
-      };
-      loaded.push(item);
-    }catch(e){
-      // ignore broken ones
-    }
-  }
-
-  // Add grid + recenter
-  for(const it of loaded) scene.add(it.obj);
-  const gridGroup = placeOnGrid(loaded);
-
-  // store worlds list (as placed objects)
-  worlds.push(...loaded);
-
-  // If zero worlds loaded, still run
-  if(!worlds.length){
-    logInfo("Loaded 0 worlds (GLBs may be invalid). Avatar may still load.");
-    resetOverwatchCam(true);
-    return;
-  }
-
-  // Start with a good overwatch framing based on grid bounding box
-  const box = new THREE.Box3().setFromObject(gridGroup);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  owTarget.copy(center);
-
-  // pick distance based on content size
-  owDist = clamp(size.length() * 1.15, 140, 850);
-  owYaw = 0;
-  owPitch = -1.05;
-  resetOverwatchCam(false);
-
-  currentIndex = 0;
-  updateInfo(`\nTip: tap Mode to FOLLOW and fly the avatar to a world.`);
-})();
-
-/* ---------------- Main loop ---------------- */
-let lookVX=0, lookVY=0;
-
-function tick(){
-  // FOLLOW mode controls
-  if(mode === "FOLLOW" && avatar){
-    // Smooth look input (less reactive)
-    lookVX += (lookX - lookVX) * LOOK_SMOOTH;
-    lookVY += (lookY - lookVY) * LOOK_SMOOTH;
-
-    // update follow yaw/pitch
-    followYaw += (-lookVX) * LOOK_SENS;
-    followPitch += (lookVY) * LOOK_SENS;
-    followPitch = clamp(followPitch, -1.1, 0.1);
-
-    // movement: left stick only
-    // camera-forward relative movement
-    const fwd = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
-    const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
-
-    // forward/back is -moveY (because touch dy positive is downward)
-    const forwardAmt = -moveY;
-    const strafeAmt  = moveX;
-
-    const vel = new THREE.Vector3()
-      .addScaledVector(fwd, forwardAmt)
-      .addScaledVector(right, strafeAmt);
-
-    if(vel.lengthSq() > 0.0001){
-      vel.normalize().multiplyScalar(MOVE_SPEED);
-      avatar.position.add(vel);
-    }
-
-    // vertical
-    let vy = 0;
-    if(upHeld) vy += VERTICAL_SPEED;
-    if(downHeld) vy -= VERTICAL_SPEED;
-    avatar.position.y += vy;
-
-    // keyboard optional
-    if(keys['w']) avatar.position.addScaledVector(fwd, MOVE_SPEED);
-    if(keys['s']) avatar.position.addScaledVector(fwd, -MOVE_SPEED);
-    if(keys['a']) avatar.position.addScaledVector(right, -MOVE_SPEED);
-    if(keys['d']) avatar.position.addScaledVector(right, MOVE_SPEED);
-    if(keys[' ']) avatar.position.y += VERTICAL_SPEED;
-    if(keys['shift']) avatar.position.y -= VERTICAL_SPEED;
-
-    // update camera behind avatar
-    const p = avatar.position.clone();
-    const dir = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
-    const camPos = p.clone()
-      .addScaledVector(dir, -followDist)
-      .add(new THREE.Vector3(0, followDist*0.62, 0));
-
-    // apply pitch by nudging look target upward/downward
-    cam.position.copy(camPos);
-    const lookAt = p.clone().add(new THREE.Vector3(0, 3.0 + followPitch*6.0, 0));
-    cam.lookAt(lookAt);
-  }
-
-  renderer.render(scene, cam);
-  requestAnimationFrame(tick);
-}
-tick();
-
-/* ---------------- Default: start overwatch ---------------- */
-setMode("OVERWATCH");
-
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
