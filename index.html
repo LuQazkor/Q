@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>GLB Overwatch Viewer v22</title>
+<title>GLB Overwatch Viewer v23</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
 
 <style>
@@ -14,7 +14,6 @@ html,body{
   touch-action:none;
   font-family:system-ui,-apple-system,BlinkMacSystemFont;
 }
-
 #hud{
   position:absolute;
   top:12px;
@@ -25,7 +24,6 @@ html,body{
   border-radius:14px;
   font-size:14px;
 }
-
 #version{
   position:absolute;
   top:12px;
@@ -36,7 +34,6 @@ html,body{
   border-radius:999px;
   font-size:12px;
 }
-
 .joy{
   position:absolute;
   bottom:24px;
@@ -46,10 +43,8 @@ html,body{
   background:rgba(255,255,255,.08);
   touch-action:none;
 }
-
 #joyL{ left:24px; }
 #joyR{ right:24px; }
-
 .knob{
   position:absolute;
   left:50%;
@@ -65,12 +60,12 @@ html,body{
 
 <body>
 <div id="hud">
-<b>FINAL HUMAN CONTROL MODEL (LOCKED)</b><br/>
+<b>FINAL HUMAN CONTROL MODEL</b><br/>
 👁 Look: 1-finger drag<br/>
 🕹 Move: dual joysticks<br/>
-✋ Tap: interact
+🛰 Double-tap: camera mode
 </div>
-<div id="version">v22</div>
+<div id="version">v23</div>
 
 <div id="joyL" class="joy"><div class="knob"></div></div>
 <div id="joyR" class="joy"><div class="knob"></div></div>
@@ -89,13 +84,24 @@ const engine=new BABYLON.Engine(canvas,true);
 const scene=new BABYLON.Scene(engine);
 scene.clearColor=new BABYLON.Color4(0.05,0.2,0.2,1);
 
+/* -------------------- STATE -------------------- */
+const state={
+  speed:0.8,
+  verticalSpeed:0.6,
+  lookSensitivity:0.002,
+  mode:"free" // free | follow | orbit
+};
+
+const BASE_FOV=0.8;
+let targetFov=BASE_FOV;
+
 /* -------------------- CAMERA -------------------- */
 const camera=new BABYLON.UniversalCamera(
   "cam",new BABYLON.Vector3(0,20,-60),scene
 );
-camera.rotation=new BABYLON.Vector3(0,0,0);
 camera.attachControl(canvas,false);
 camera.speed=0;
+camera.fov=BASE_FOV;
 
 /* -------------------- LIGHT -------------------- */
 new BABYLON.HemisphericLight("h",
@@ -115,35 +121,45 @@ const params=new URLSearchParams(location.search);
 const avatarURL=params.get("avatar");
 const worldURLs=params.getAll("world");
 
+let target=null;
+
 /* AVATAR */
 if(avatarURL){
-  BABYLON.SceneLoader.ImportMeshAsync(
-    null,"",avatarURL,scene
-  );
+  BABYLON.SceneLoader.ImportMeshAsync(null,"",avatarURL,scene)
+  .then(res=>{
+    target=res.meshes.find(m=>m.parent===null)||res.meshes[0];
+  });
 }
 
 /* WORLDS */
 worldURLs.forEach((url,i)=>{
-  BABYLON.SceneLoader.ImportMeshAsync(
-    null,"",url,scene
-  ).then(res=>{
-    res.meshes[0].position=new BABYLON.Vector3(
-      (i%4)*50-75,0,Math.floor(i/4)*50
-    );
+  BABYLON.SceneLoader.ImportMeshAsync(null,"",url,scene)
+  .then(res=>{
+    const root=res.meshes.find(m=>m.parent===null)||res.meshes[0];
+    root.position.set((i%4)*50-75,0,Math.floor(i/4)*50);
   });
 });
 
-/* -------------------- LOOK (1 FINGER) -------------------- */
-let lx,ly;
+/* -------------------- LOOK (SAFE TOUCH) -------------------- */
+let lx=0,ly=0,lookActive=false;
+const PITCH_LIMIT=Math.PI/2.2;
+
 canvas.addEventListener("pointerdown",e=>{
+  if(e.target.closest(".joy")) return;
+  lookActive=true;
   lx=e.clientX; ly=e.clientY;
 });
 canvas.addEventListener("pointermove",e=>{
-  if(e.buttons!==1) return;
-  camera.rotation.y+=(e.clientX-lx)*0.002;
-  camera.rotation.x+=(e.clientY-ly)*0.002;
+  if(!lookActive) return;
+  camera.rotation.y+=(e.clientX-lx)*state.lookSensitivity;
+  camera.rotation.x+=(e.clientY-ly)*state.lookSensitivity;
+  camera.rotation.x=Math.max(
+    -PITCH_LIMIT,
+    Math.min(PITCH_LIMIT,camera.rotation.x)
+  );
   lx=e.clientX; ly=e.clientY;
 });
+canvas.addEventListener("pointerup",()=>lookActive=false);
 
 /* -------------------- JOYSTICKS -------------------- */
 function makeJoy(el){
@@ -154,7 +170,6 @@ function makeJoy(el){
     active=true;
     el.setPointerCapture(e.pointerId);
   });
-
   el.addEventListener("pointermove",e=>{
     if(!active) return;
     const r=el.getBoundingClientRect();
@@ -162,48 +177,69 @@ function makeJoy(el){
     dy=(e.clientY-(r.top+r.height/2))/(r.height/2);
     dx=Math.max(-1,Math.min(1,dx));
     dy=Math.max(-1,Math.min(1,dy));
-    knob.style.transform=
-      `translate(${dx*40}px,${dy*40}px)`;
+    knob.style.transform=`translate(${dx*40}px,${dy*40}px)`;
   });
-
   el.addEventListener("pointerup",()=>{
     active=false; dx=dy=0;
     knob.style.transform="";
   });
-
-  return ()=>({x:dx,y:dy});
+  return()=>({x:dx,y:dy});
 }
 
-const joyL=makeJoy(document.getElementById("joyL"));
-const joyR=makeJoy(document.getElementById("joyR"));
+const joyL=makeJoy(joyL=document.getElementById("joyL"));
+const joyR=makeJoy(joyR=document.getElementById("joyR"));
 
-/* -------------------- MOVEMENT -------------------- */
-scene.onBeforeRenderObservable.add(()=>{
-  const l=joyL(), r=joyR();
-  const fwd=new BABYLON.Vector3(
-    Math.sin(camera.rotation.y),
-    0,
-    Math.cos(camera.rotation.y)
-  );
-  const right=new BABYLON.Vector3(
-    Math.sin(camera.rotation.y+Math.PI/2),
-    0,
-    Math.cos(camera.rotation.y+Math.PI/2)
-  );
-  const speed=0.8;
+/* -------------------- HELPERS -------------------- */
+function camVectors(){
+  const y=camera.rotation.y;
+  return{
+    f:new BABYLON.Vector3(Math.sin(y),0,Math.cos(y)),
+    r:new BABYLON.Vector3(Math.sin(y+Math.PI/2),0,Math.cos(y+Math.PI/2))
+  };
+}
 
-  // LEFT joystick
-  camera.position.addInPlace(fwd.scale(-l.y*speed));
-  camera.position.addInPlace(right.scale(l.x<0?l.x*speed:0));
-  if(l.x>0.5) camera.fov*=0.995;
+/* -------------------- CAMERA MODES -------------------- */
+function updateCameraMode(){
+  if(!target) return;
+  if(state.mode==="follow"){
+    const offset=new BABYLON.Vector3(0,12,-25);
+    const q=BABYLON.Quaternion.FromEulerAngles(0,camera.rotation.y,0);
+    offset.rotateByQuaternionToRef(q,offset);
+    camera.position.copyFrom(target.position.add(offset));
+    camera.setTarget(target.position);
+  }
+  if(state.mode==="orbit"){
+    camera.setTarget(target.position);
+  }
+}
 
-  // RIGHT joystick
-  camera.position.y+=r.y*speed;
-  camera.position.addInPlace(right.scale(r.x>0?r.x*speed:0));
-  if(r.x<-0.5) camera.fov*=1.005;
+/* -------------------- INPUT EXTRAS -------------------- */
+addEventListener("dblclick",()=>{
+  state.mode=
+    state.mode==="free"?"follow":
+    state.mode==="follow"?"orbit":"free";
 });
 
 /* -------------------- LOOP -------------------- */
+scene.onBeforeRenderObservable.add(()=>{
+  const l=joyL(), r=joyR();
+  const {f,r:rt}=camVectors();
+
+  if(state.mode==="free"){
+    camera.position.addInPlace(f.scale(-l.y*state.speed));
+    camera.position.addInPlace(rt.scale(l.x*state.speed));
+    camera.position.y+=r.y*state.verticalSpeed;
+  }
+
+  targetFov =
+    l.x>0.6 ? 0.65 :
+    r.x<-0.6 ? 1.0 :
+    BASE_FOV;
+
+  camera.fov+=(targetFov-camera.fov)*0.1;
+  updateCameraMode();
+});
+
 engine.runRenderLoop(()=>scene.render());
 addEventListener("resize",()=>engine.resize());
 </script>
