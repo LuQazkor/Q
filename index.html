@@ -1,238 +1,280 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>Universal GLB Field – v22</title>
+<meta charset="utf-8"/>
+<title>GLB Overwatch Viewer v23-mobile</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: #0b2a2a;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
+html,body{
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#0b3a3a;
+  touch-action:none;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont;
 }
 
-#hud {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  background: rgba(0,0,0,0.65);
-  color: #dff;
-  padding: 12px 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  max-width: 90vw;
-  z-index: 10;
+#hud{
+  position:absolute;
+  top:12px;
+  left:12px;
+  background:rgba(0,0,0,.6);
+  color:#fff;
+  padding:12px 14px;
+  border-radius:14px;
+  font-size:14px;
+  z-index:10;
 }
 
-#hud b { color: #9ff; }
-
-#fileBtn {
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: #0aa;
-  color: #022;
-  border-radius: 8px;
-  text-align: center;
-  font-weight: 600;
+#version{
+  position:absolute;
+  top:12px;
+  right:12px;
+  background:#000;
+  color:#6ff;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  z-index:10;
 }
 
-#fileInput {
-  display: none;
+.joy{
+  position:absolute;
+  bottom:24px;
+  width:140px;
+  height:140px;
+  border-radius:50%;
+  background:rgba(255,255,255,.08);
+  z-index:10;
 }
 
-#movePad {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 280px;
-  height: 140px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 70px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  align-items: center;
-  justify-items: center;
-  z-index: 5;
-}
+#joyL{ left:24px; }
+#joyR{ right:24px; }
 
-.moveBtn {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-}
-
-.moveBtn:active {
-  background: rgba(255,255,255,0.5);
+.knob{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:60px;
+  height:60px;
+  margin:-30px;
+  border-radius:50%;
+  background:rgba(255,255,255,.35);
 }
 </style>
 </head>
 
 <body>
-
 <div id="hud">
-  <b>Universal GLB Field</b> v22<br/>
-  Avatar: <span id="avatarStatus">OK</span><br/>
-  Worlds loaded: <span id="worldCount">0</span><br/>
-  <div id="fileBtn">Add GLBs</div>
+<b>FINAL HUMAN CONTROL MODEL</b><br/>
+👁 Look: 1-finger drag<br/>
+🕹 Move: dual joysticks<br/>
+🛰 Double-tap: camera mode
 </div>
+<div id="version">v23-mobile</div>
 
-<input id="fileInput" type="file" multiple accept=".glb"/>
+<div id="joyL" class="joy"><div class="knob"></div></div>
+<div id="joyR" class="joy"><div class="knob"></div></div>
 
-<div id="movePad">
-  <div class="moveBtn" data-move="left">←</div>
-  <div class="moveBtn" data-move="forward">↑</div>
-  <div class="moveBtn" data-move="right">→</div>
-  <div class="moveBtn" data-move="down">↓</div>
-  <div class="moveBtn" data-move="back">↓↓</div>
-  <div class="moveBtn" data-move="up">↑↑</div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTFFileLoader.js"></script>
 
 <script>
-/* ---------------- CORE SCENE ---------------- */
+/* ================= ENGINE ================= */
+const canvas=document.createElement("canvas");
+canvas.style.position="fixed";
+canvas.style.top="0";
+canvas.style.left="0";
+canvas.style.width="100vw";
+canvas.style.height="100vh";
+document.body.appendChild(canvas);
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b2a2a);
+const engine=new BABYLON.Engine(canvas,true);
+engine.resize();
 
-const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
-camera.position.set(0, 80, 80);
-camera.lookAt(0,0,0);
+const scene=new BABYLON.Scene(engine);
+scene.clearColor=new BABYLON.Color4(0.05,0.2,0.2,1);
 
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(innerWidth, innerHeight);
-document.body.appendChild(renderer.domElement);
-
-window.addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-/* ---------------- LIGHT ---------------- */
-
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-const d = new THREE.DirectionalLight(0xffffff, 0.6);
-d.position.set(50,100,50);
-scene.add(d);
-
-/* ---------------- AVATAR ---------------- */
-
-const avatar = new THREE.Mesh(
-  new THREE.CapsuleGeometry(1,3,4,8),
-  new THREE.MeshStandardMaterial({ color: 0x66ccff })
-);
-avatar.position.y = 3;
-scene.add(avatar);
-
-/* ---------------- CONTROLS ---------------- */
-
-let moveState = {x:0,y:0,z:0};
-const SPEED = 0.6;
-
-document.querySelectorAll('.moveBtn').forEach(btn=>{
-  btn.addEventListener('touchstart', e=>{
-    e.preventDefault();
-    setMove(btn.dataset.move, 1);
-  });
-  btn.addEventListener('touchend', e=>{
-    e.preventDefault();
-    setMove(btn.dataset.move, 0);
-  });
-});
-
-function setMove(dir,val){
-  if(dir==="left") moveState.x = -val;
-  if(dir==="right") moveState.x = val;
-  if(dir==="forward") moveState.z = -val;
-  if(dir==="back") moveState.z = val;
-  if(dir==="up") moveState.y = val;
-  if(dir==="down") moveState.y = -val;
-}
-
-/* LOOK — drag anywhere */
-let looking=false, lastX=0,lastY=0;
-window.addEventListener('touchstart',e=>{
-  looking=true;
-  lastX=e.touches[0].clientX;
-  lastY=e.touches[0].clientY;
-});
-window.addEventListener('touchmove',e=>{
-  if(!looking) return;
-  const dx=e.touches[0].clientX-lastX;
-  const dy=e.touches[0].clientY-lastY;
-  avatar.rotation.y -= dx*0.005;
-  camera.rotation.x -= dy*0.003;
-  camera.rotation.x=Math.max(-1.2,Math.min(1.2,camera.rotation.x));
-  lastX=e.touches[0].clientX;
-  lastY=e.touches[0].clientY;
-});
-window.addEventListener('touchend',()=>looking=false);
-
-/* ---------------- GLB LOADING ---------------- */
-
-const loader = new THREE.GLTFLoader();
-let gridIndex = 0;
-const GRID_SPACING = 30;
-
-document.getElementById('fileBtn').onclick = ()=>fileInput.click();
-
-fileInput.onchange = e=>{
-  [...e.target.files].forEach(loadGLB);
+/* ================= STATE ================= */
+const state={
+  speed:0.8,
+  vert:0.6,
+  look:0.002,
+  mode:"free" // free | follow | orbit
 };
 
-function loadGLB(file){
-  const url = URL.createObjectURL(file);
-  loader.load(url, gltf=>{
-    const obj = gltf.scene;
-    const box = new THREE.Box3().setFromObject(obj);
-    const size = box.getSize(new THREE.Vector3()).length();
-    const scale = 12 / size;
-    obj.scale.setScalar(scale);
+const BASE_FOV=0.8;
+let targetFov=BASE_FOV;
 
-    const x = (gridIndex % 5) * GRID_SPACING;
-    const z = Math.floor(gridIndex / 5) * GRID_SPACING;
-    obj.position.set(x,0,z);
+/* ================= CAMERA ================= */
+const camera=new BABYLON.UniversalCamera(
+  "cam",
+  new BABYLON.Vector3(0,20,-60),
+  scene
+);
+scene.activeCamera=camera;
+camera.attachControl(canvas,false);
+camera.speed=0;
+camera.fov=BASE_FOV;
 
-    scene.add(obj);
-    gridIndex++;
-    document.getElementById('worldCount').innerText = gridIndex;
+/* ================= LIGHT ================= */
+new BABYLON.HemisphericLight(
+  "light",
+  new BABYLON.Vector3(0,1,0),
+  scene
+);
+
+/* ================= GRID ================= */
+const grid=BABYLON.MeshBuilder.CreateGround(
+  "grid",
+  {width:500,height:500},
+  scene
+);
+const gm=new BABYLON.StandardMaterial("gm",scene);
+gm.wireframe=true;
+gm.emissiveColor=new BABYLON.Color3(0,1,1);
+grid.material=gm;
+
+/* ================= LOAD URL ASSETS ================= */
+const params=new URLSearchParams(location.search);
+const avatarURL=params.get("avatar");
+const worldURLs=params.getAll("world");
+
+let target=null;
+
+if(avatarURL){
+  BABYLON.SceneLoader.ImportMeshAsync(null,"",avatarURL,scene)
+  .then(res=>{
+    target=res.meshes.find(m=>!m.parent)||res.meshes[0];
   });
 }
 
-/* ---------------- LOOP ---------------- */
+worldURLs.forEach((url,i)=>{
+  BABYLON.SceneLoader.ImportMeshAsync(null,"",url,scene)
+  .then(res=>{
+    const root=res.meshes.find(m=>!m.parent)||res.meshes[0];
+    root.position.set(
+      (i%4)*50-75,
+      0,
+      Math.floor(i/4)*50
+    );
+  });
+});
 
-function animate(){
-  requestAnimationFrame(animate);
-  avatar.position.x += moveState.x * SPEED;
-  avatar.position.y += moveState.y * SPEED;
-  avatar.position.z += moveState.z * SPEED;
+/* ================= LOOK ================= */
+let lx=0,ly=0,looking=false;
+const PITCH_LIMIT=Math.PI/2.2;
 
-  camera.position.lerp(
-    new THREE.Vector3(
-      avatar.position.x,
-      avatar.position.y+40,
-      avatar.position.z+60
-    ),
-    0.1
+canvas.addEventListener("pointerdown",e=>{
+  if(e.target.closest(".joy")) return;
+  looking=true;
+  lx=e.clientX;
+  ly=e.clientY;
+});
+
+canvas.addEventListener("pointermove",e=>{
+  if(!looking) return;
+  camera.rotation.y+=(e.clientX-lx)*state.look;
+  camera.rotation.x+=(e.clientY-ly)*state.look;
+  camera.rotation.x=Math.max(
+    -PITCH_LIMIT,
+    Math.min(PITCH_LIMIT,camera.rotation.x)
   );
-  camera.lookAt(avatar.position);
-  renderer.render(scene,camera);
-}
-animate();
-</script>
+  lx=e.clientX;
+  ly=e.clientY;
+});
 
+addEventListener("pointerup",()=>looking=false);
+
+/* ================= JOYSTICKS ================= */
+function makeJoy(el){
+  const knob=el.querySelector(".knob");
+  let x=0,y=0,active=false;
+
+  el.onpointerdown=e=>{
+    active=true;
+    el.setPointerCapture(e.pointerId);
+  };
+
+  el.onpointermove=e=>{
+    if(!active) return;
+    const r=el.getBoundingClientRect();
+    x=(e.clientX-(r.left+r.width/2))/(r.width/2);
+    y=(e.clientY-(r.top+r.height/2))/(r.height/2);
+    x=Math.max(-1,Math.min(1,x));
+    y=Math.max(-1,Math.min(1,y));
+    knob.style.transform=`translate(${x*40}px,${y*40}px)`;
+  };
+
+  el.onpointerup=()=>{
+    active=false;
+    x=y=0;
+    knob.style.transform="";
+  };
+
+  return()=>({x,y});
+}
+
+const joyL=makeJoy(document.getElementById("joyL"));
+const joyR=makeJoy(document.getElementById("joyR"));
+
+/* ================= HELPERS ================= */
+function dirs(){
+  const y=camera.rotation.y;
+  return{
+    f:new BABYLON.Vector3(Math.sin(y),0,Math.cos(y)),
+    r:new BABYLON.Vector3(Math.sin(y+Math.PI/2),0,Math.cos(y+Math.PI/2))
+  };
+}
+
+/* ================= CAMERA MODES ================= */
+function updateCameraMode(){
+  if(!target) return;
+  if(state.mode==="follow"){
+    const off=new BABYLON.Vector3(0,12,-25);
+    off.rotateByQuaternionToRef(
+      BABYLON.Quaternion.FromEulerAngles(0,camera.rotation.y,0),
+      off
+    );
+    camera.position.copyFrom(target.position.add(off));
+    camera.setTarget(target.position);
+  }
+  if(state.mode==="orbit"){
+    camera.setTarget(target.position);
+  }
+}
+
+addEventListener("dblclick",()=>{
+  state.mode=
+    state.mode==="free"?"follow":
+    state.mode==="follow"?"orbit":"free";
+});
+
+/* ================= LOOP ================= */
+scene.onBeforeRenderObservable.add(()=>{
+  const l=joyL(), r=joyR();
+  const {f,r:rt}=dirs();
+
+  if(state.mode==="free"){
+    camera.position.addInPlace(f.scale(-l.y*state.speed));
+    camera.position.addInPlace(rt.scale(l.x*state.speed));
+    camera.position.y+=r.y*state.vert;
+  }
+
+  targetFov =
+    l.x>0.6 ? 0.65 :
+    l.x<-0.6 ? 1.0 :
+    BASE_FOV;
+
+  camera.fov+=(targetFov-camera.fov)*0.1;
+  updateCameraMode();
+});
+
+engine.runRenderLoop(()=>scene.render());
+addEventListener("resize",()=>engine.resize());
+</script>
 </body>
 </html>
