@@ -2,254 +2,680 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport"
-      content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>GLB World v13</title>
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>GLB Grid v16</title>
 
 <style>
-html,body{
-  margin:0;width:100%;height:100%;overflow:hidden;
-  background:#000;touch-action:none;-webkit-text-size-adjust:100%;
-}
-#c{width:100vw;height:100vh;display:block;background:#111;touch-action:none}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#061f1f;touch-action:none;-webkit-text-size-adjust:100%}
+  #c{width:100vw;height:100vh;display:block;touch-action:none}
 
-#badge{
-  position:fixed;top:10px;right:10px;z-index:9999;
-  padding:6px 10px;font:12px system-ui;color:#fff;
-  background:rgba(0,0,0,.85);
-  border:1px solid rgba(255,255,255,.35);
-  border-radius:999px;pointer-events:none
-}
+  #badge{
+    position:fixed;top:10px;right:10px;z-index:9999;
+    padding:6px 10px;font:12px system-ui;color:#fff;
+    background:rgba(0,0,0,.82);
+    border:1px solid rgba(255,255,255,.28);
+    border-radius:999px;pointer-events:none
+  }
 
-#hud{
-  position:fixed;top:10px;left:10px;z-index:9998;
-  font:13px system-ui;color:#fff;
-  background:rgba(0,0,0,.7);
-  border:1px solid rgba(255,255,255,.15);
-  padding:10px;border-radius:12px;
-  max-width:calc(100vw - 180px)
-}
-#hud .small{opacity:.9;font-size:12px;margin-top:6px;white-space:pre-wrap}
+  #hud{
+    position:fixed;top:10px;left:10px;z-index:9998;
+    font:13px system-ui;color:#fff;
+    background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.16);
+    padding:10px;border-radius:14px;
+    max-width:calc(100vw - 170px)
+  }
+  #hud .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  #hud button{
+    padding:10px 12px;border-radius:999px;
+    background:rgba(0,0,0,.72);
+    color:#fff;border:1px solid rgba(255,255,255,.18)
+  }
+  #hud .small{opacity:.9;font-size:12px;margin-top:8px;white-space:pre-wrap;line-height:1.25}
 
-#mobile{position:fixed;left:0;right:0;bottom:0;pointer-events:none}
-.pad{
-  pointer-events:auto;position:absolute;bottom:14px;
-  width:150px;height:150px;border-radius:999px;
-  background:rgba(255,255,255,.08);
-  border:1px solid rgba(255,255,255,.2)
-}
-#leftPad{left:14px}
-#rightPad{right:14px;width:170px;height:170px}
-.stick{
-  position:absolute;left:50%;top:50%;
-  transform:translate(-50%,-50%);
-  width:64px;height:64px;border-radius:999px;
-  background:rgba(255,255,255,.2)
-}
-#btns{
-  pointer-events:auto;position:absolute;left:50%;
-  transform:translateX(-50%);bottom:14px;
-  display:flex;gap:8px
-}
-#btns button{
-  padding:10px 12px;border-radius:999px;
-  background:rgba(0,0,0,.75);
-  color:#fff;border:1px solid rgba(255,255,255,.2)
-}
+  /* Mobile pads only really matter in FOLLOW mode */
+  .pad{
+    position:fixed;bottom:14px;width:150px;height:150px;border-radius:999px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12);
+    z-index:9997;
+    pointer-events:auto;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  #left{left:14px}
+  #right{right:14px}
+
+  .stick{
+    position:absolute;left:50%;top:50%;
+    width:64px;height:64px;margin:-32px;
+    border-radius:999px;
+    background:rgba(255,255,255,.23);
+    transform:translate(0,0);
+  }
+
+  .btnbar{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
+    display:flex;gap:10px;z-index:9997;
+    pointer-events:auto;
+    user-select:none;-webkit-user-select:none;
+  }
+  .btnbar button{
+    padding:12px 14px;border-radius:999px;
+    background:rgba(0,0,0,.75);color:#fff;
+    border:1px solid rgba(255,255,255,.18);
+    min-width:70px
+  }
+
+  /* Hide pads in OVERWATCH mode */
+  body.overwatch #left,
+  body.overwatch #right,
+  body.overwatch .btnbar{display:none;}
 </style>
 </head>
 
-<body>
-<div id="badge">v13</div>
+<body class="overwatch">
+<canvas id="c"></canvas>
+<div id="badge"></div>
 
 <div id="hud">
-  <div><b>Status</b> v13 (scale + controls locked)</div>
-  <div class="small" id="msg">booting…</div>
-</div>
-
-<div id="mobile">
-  <div id="leftPad" class="pad"><div id="leftStick" class="stick"></div></div>
-  <div id="rightPad" class="pad"><div id="rightStick" class="stick"></div></div>
-  <div id="btns">
-    <button id="up">Up</button>
-    <button id="down">Down</button>
-    <button id="sprint">Sprint</button>
+  <div><b>Status v16</b> (overwatch grid + normalized worlds + fixed mobile controls)</div>
+  <div class="row">
+    <button id="modeBtn">Mode: OVERWATCH</button>
+    <button id="prevBtn">Prev</button>
+    <button id="nextBtn">Next</button>
+    <button id="focusBtn">Focus</button>
+    <button id="resetBtn">Reset</button>
   </div>
+  <div id="info" class="small">booting…</div>
 </div>
 
-<canvas id="c"></canvas>
+<div id="left" class="pad"><div class="stick"></div></div>
+<div id="right" class="pad"><div class="stick"></div></div>
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+<div class="btnbar">
+  <button id="upBtn">Up</button>
+  <button id="downBtn">Down</button>
+</div>
 
-<script>
-/* ===== build + cache bust ===== */
-const BUILD_ID = Date.now();
-document.getElementById("badge").textContent = "v13 • " + BUILD_ID;
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
 
-/* ===== basics ===== */
-const msg = t => document.getElementById("msg").textContent = t;
-const canvas = document.getElementById("c");
-const engine = new BABYLON.Engine(canvas,true);
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.05,0.25,0.25,1);
+/* ---------------- Version badge ---------------- */
+const VERSION = "v16";
+const BUILD = String(Date.now());
+document.getElementById('badge').textContent = `${VERSION} • ${BUILD}`;
 
-new BABYLON.HemisphericLight("h",new BABYLON.Vector3(0,1,0),scene).intensity=1.3;
+/* ---------------- iOS Safari “wiggy zoom” killers ---------------- */
+document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
+document.addEventListener('gesturechange', e => e.preventDefault(), {passive:false});
+document.addEventListener('gestureend', e => e.preventDefault(), {passive:false});
+// Prevent double-tap zoom on buttons/pads
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e)=>{
+  const now = Date.now();
+  if(now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+},{passive:false});
 
-/* ===== camera model (LOCKED) ===== */
-const cam = new BABYLON.FollowCamera("cam",
-  new BABYLON.Vector3(0,2,-6),scene);
-cam.radius = 6;
-cam.heightOffset = 2.2;
-cam.rotationOffset = 180;
-cam.cameraAcceleration = 0.25;
-cam.maxCameraSpeed = 50;
-scene.activeCamera = cam;
+/* ---------------- Three setup ---------------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.setSize(innerWidth, innerHeight, false);
 
-/* ===== reference grid ===== */
-const grid = BABYLON.MeshBuilder.CreateGround("g",{width:1200,height:1200},scene);
-const gm = new BABYLON.StandardMaterial("gm",scene);
-gm.wireframe=true; gm.emissiveColor=new BABYLON.Color3(0,1,1);
-grid.material=gm;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x061f1f);
 
-/* ===== helpers ===== */
-function bounds(meshes){
-  let min=new BABYLON.Vector3(1e9,1e9,1e9),
-      max=new BABYLON.Vector3(-1e9,-1e9,-1e9),
-      ok=false;
-  for(const m of meshes){
-    if(!m.getTotalVertices||m.getTotalVertices()===0) continue;
-    m.computeWorldMatrix(true);
-    const b=m.getBoundingInfo().boundingBox;
-    min=BABYLON.Vector3.Minimize(min,b.minimumWorld);
-    max=BABYLON.Vector3.Maximize(max,b.maximumWorld);
-    ok=true;
-  }
-  return {ok,min,max,size:ok?max.subtract(min):BABYLON.Vector3.Zero()};
-}
-function dz(v,d=0.12,e=1.6){
-  const a=Math.abs(v);
-  if(a<d) return 0;
-  const t=(a-d)/(1-d);
-  return Math.sign(v)*Math.pow(t,e);
-}
+const cam = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 10000);
 
-/* ===== input ===== */
-let mv={x:0,y:0}, lk={x:0,y:0};
-let up=false,down=false,sprint=false;
+const amb = new THREE.AmbientLight(0xffffff, 1.15);
+scene.add(amb);
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(120, 220, 80);
+scene.add(sun);
 
-function stick(pad,stick,cb){
-  const P=document.getElementById(pad);
-  const S=document.getElementById(stick);
-  const M=60; let id=null;
-  const end=()=>{id=null;S.style.transform="translate(-50%,-50%)";cb(0,0);}
-  P.onpointerdown=e=>{id=e.pointerId;P.setPointerCapture(id)};
-  P.onpointermove=e=>{
-    if(e.pointerId!==id) return;
-    const r=P.getBoundingClientRect();
-    let dx=e.clientX-(r.left+r.width/2),
-        dy=e.clientY-(r.top+r.height/2);
-    const l=Math.hypot(dx,dy); if(l>M){dx*=M/l;dy*=M/l;}
-    S.style.transform=`translate(calc(-50%+${dx}px),calc(-50%+${dy}px))`;
-    cb(dx/M,dy/M);
-  };
-  P.onpointerup=end; P.onpointercancel=end;
-}
-stick("leftPad","leftStick",(x,y)=>{mv.x=x;mv.y=-y});
-stick("rightPad","rightStick",(x,y)=>{lk.x=x;lk.y=y});
-
-["up","down","sprint"].forEach(id=>{
-  document.getElementById(id).onpointerdown=()=>window[id]=true;
-  document.getElementById(id).onpointerup=()=>window[id]=false;
+addEventListener('resize', ()=>{
+  cam.aspect = innerWidth/innerHeight;
+  cam.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight, false);
 });
 
-/* ===== avatar (WORLD SCALE SOURCE) ===== */
-let avatar=null;
-let yaw=0,yawVel=0;
+/* ---------------- Helpers ---------------- */
+const infoEl = document.getElementById('info');
+function logInfo(s){ infoEl.textContent = s; }
 
-async function loadAvatar(url){
-  const root=new BABYLON.TransformNode("AV",scene);
-  const res=await BABYLON.SceneLoader.ImportMeshAsync("","",url,scene);
-  res.meshes.forEach(m=>{
-    m.parent=root;
-    if(!m.material){
-      const mat=new BABYLON.StandardMaterial("a",scene);
-      mat.emissiveColor=new BABYLON.Color3(0.2,0.6,1);
-      m.material=mat;
+function classify(name){
+  const n = name.toLowerCase();
+  if(n.includes('avatar')) return 'avatar';
+  if(n.includes('icu') || n.includes('hospital') || n.includes('bed')) return 'medical';
+  if(n.includes('office') || n.includes('room') || n.includes('home')) return 'interior';
+  if(n.includes('city') || n.includes('street') || n.includes('pack')) return 'city';
+  if(n.includes('car') || n.includes('dodge') || n.includes('peugeot') || n.includes('vehicle')) return 'vehicle';
+  return 'misc';
+}
+function fileNameFromUrl(u){
+  try{ return decodeURIComponent(u.split('/').pop()); }catch{ return u.split('/').pop(); }
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function easeExpo(x){ // x in [-1..1], returns eased [-1..1]
+  const s = Math.sign(x);
+  const ax = Math.abs(x);
+  // soften center, still reaches 1
+  return s * (ax*ax*(3-2*ax));
+}
+
+/* ---------------- Discover GLBs from /glb/ ----------------
+   Works on GitHub Pages because /glb/ returns a directory listing HTML
+*/
+async function discoverGlbs(){
+  const base = new URL('./glb/', location.href).toString();
+  try{
+    const res = await fetch(base + `?t=${Date.now()}`, {cache:'no-store'});
+    const html = await res.text();
+    const a = document.createElement('a');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const links = [...tmp.querySelectorAll('a')].map(x=>x.getAttribute('href')||'');
+    const glbs = links
+      .filter(h=>h.toLowerCase().endsWith('.glb'))
+      .map(h=>{
+        // directory listing uses relative hrefs
+        if(h.startsWith('http')) return h;
+        return new URL(h, base).toString();
+      });
+    // De-dupe
+    return [...new Set(glbs)];
+  }catch(e){
+    return [];
+  }
+}
+
+/* ---------------- Load + normalize ---------------- */
+const loader = new GLTFLoader();
+
+const worlds = [];           // {name,url,obj,category}
+let avatar = null;           // THREE.Object3D
+let currentIndex = 0;
+
+const TARGET_WORLD_DIAM = 22;     // normalized “display size”
+const GRID_CELL = 42;             // spacing between grid cells
+const GROUP_GAP_ROWS = 2;         // blank rows between category blocks
+
+function normalizeToDiameter(obj, targetDiam){
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const diam = size.length();
+  if(!isFinite(diam) || diam <= 0) return {scale:1, diam:0};
+  const s = targetDiam / diam;
+  obj.scale.multiplyScalar(s);
+  return {scale:s, diam};
+}
+
+function centerToGround(obj){
+  // shift so lowest point hits y=0 and center xz
+  const box = new THREE.Box3().setFromObject(obj);
+  const c = box.getCenter(new THREE.Vector3());
+  const min = box.min;
+  obj.position.x -= c.x;
+  obj.position.z -= c.z;
+  obj.position.y -= min.y;
+}
+
+function placeOnGrid(items){
+  // group by category, then place each category into its own grid block
+  const byCat = {};
+  for(const it of items){
+    (byCat[it.category] ||= []).push(it);
+  }
+  const catOrder = ['medical','interior','city','vehicle','misc'];
+  let row = 0;
+  for(const cat of catOrder){
+    const arr = byCat[cat] || [];
+    if(!arr.length) continue;
+
+    // sort by name so stable
+    arr.sort((a,b)=>a.name.localeCompare(b.name));
+
+    // block width: 6 columns
+    const cols = 6;
+    for(let i=0;i<arr.length;i++){
+      const r = Math.floor(i/cols);
+      const c = i%cols;
+      arr[i].obj.position.set(
+        c*GRID_CELL,
+        0,
+        (row + r)*GRID_CELL
+      );
     }
-    m.material.backFaceCulling=false;
-  });
-  const b=bounds(root.getChildMeshes());
-  const h=b.size.y||1;
-  const s=1.75/h;
-  root.scaling.scaleInPlace(s);
-  const b2=bounds(root.getChildMeshes());
-  root.position.y-=b2.min.y;
-  cam.lockedTarget=root;
-  avatar=root;
+    row += Math.ceil(arr.length/cols) + GROUP_GAP_ROWS;
+  }
+
+  // after placement, recentre whole grid near origin
+  const group = new THREE.Group();
+  for(const it of items) group.add(it.obj);
+  scene.add(group);
+
+  const box = new THREE.Box3().setFromObject(group);
+  const c = box.getCenter(new THREE.Vector3());
+  group.position.x -= c.x;
+  group.position.z -= c.z;
+
+  return group;
 }
 
-/* ===== worlds ===== */
-const worlds=[];
-async function loadWorld(url){
-  const root=new BABYLON.TransformNode("W",scene);
-  const res=await BABYLON.SceneLoader.ImportMeshAsync("","",url,scene);
-  res.meshes.forEach(m=>{
-    m.parent=root;
-    m.material.backFaceCulling=false;
-  });
-  const b=bounds(root.getChildMeshes());
-  worlds.push({root,size:b.size});
-}
+/* ---------------- Camera modes ---------------- */
+let mode = "OVERWATCH"; // OVERWATCH | FOLLOW
+const modeBtn = document.getElementById('modeBtn');
 
-/* ===== layout (NO OVERLAP) ===== */
-function layout(){
-  let x=0;
-  for(const w of worlds){
-    const half=Math.max(10,Math.min(60,w.size.length()*0.5));
-    x+=half+20;
-    w.root.position.x=x;
-    x+=half;
+function setMode(m){
+  mode = m;
+  if(mode === "OVERWATCH"){
+    document.body.classList.add('overwatch');
+    modeBtn.textContent = "Mode: OVERWATCH";
+    // high vantage that sees the grid
+    resetOverwatchCam(true);
+  }else{
+    document.body.classList.remove('overwatch');
+    modeBtn.textContent = "Mode: FOLLOW";
+    // put camera behind avatar if exists, else keep current
+    if(avatar){
+      followYaw = 0;
+      followPitch = -0.25;
+      // start behind and above
+      followDist = 14;
+    }
+    // ensure we are not inside geometry
+    recenterFollow();
   }
 }
 
-/* ===== movement loop ===== */
-let vel=new BABYLON.Vector3();
-scene.onBeforeRenderObservable.add(()=>{
-  const dt=Math.min(0.05,engine.getDeltaTime()/1000);
+modeBtn.onclick = ()=> setMode(mode==="OVERWATCH" ? "FOLLOW" : "OVERWATCH");
 
-  yawVel += dz(lk.x,0.08,1.2)*6*dt;
-  yawVel *= 0.85;
-  yaw += yawVel*dt;
-  if(avatar) avatar.rotationQuaternion=BABYLON.Quaternion.FromEulerAngles(0,yaw,0);
+/* Overwatch cam: orbit-like top view */
+let owYaw = 0;
+let owPitch = -0.95;    // looking down
+let owDist = 180;
+let owTarget = new THREE.Vector3(0,0,0);
 
-  const f=dz(mv.y), s=dz(mv.x);
-  const dir=new BABYLON.Vector3(Math.sin(yaw),0,Math.cos(yaw)).scale(f)
-    .add(new BABYLON.Vector3(Math.sin(yaw+Math.PI/2),0,Math.cos(yaw+Math.PI/2)).scale(s));
-  if(dir.length()>0) dir.normalize();
+function resetOverwatchCam(hard=false){
+  if(hard){
+    owYaw = 0;
+    owPitch = -0.98;
+    owDist = 220;
+    owTarget.set(0,0,0);
+  }
+  const cp = new THREE.Vector3(
+    Math.cos(owYaw)*Math.cos(owPitch),
+    Math.sin(owPitch),
+    Math.sin(owYaw)*Math.cos(owPitch)
+  ).multiplyScalar(owDist).add(owTarget);
+  cam.position.copy(cp);
+  cam.lookAt(owTarget);
+}
 
-  const sp=(sprint?3:1)*30;
-  vel=vel.add(dir.scale(sp*dt)).scale(0.9);
-  if(avatar) avatar.position.addInPlace(vel.scale(dt));
-  if(avatar) avatar.position.y += (up-down)*12*dt;
-});
+/* Follow cam: third-person behind avatar */
+let followYaw = 0;        // yaw around avatar
+let followPitch = -0.25;  // slightly down
+let followDist = 14;
 
-/* ===== boot ===== */
-(async()=>{
-  const owner=location.hostname.split(".")[0];
-  const repo=location.pathname.split("/")[1];
-  const list=await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/glb`).then(r=>r.json());
-  const avatarFile=list.find(f=>f.name.toLowerCase()==="avatar.glb");
-  const worldsFiles=list.filter(f=>f!==avatarFile);
+function recenterFollow(){
+  if(!avatar) return;
+  // keep camera outside avatar
+  const p = avatar.position.clone();
+  const dir = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
+  const camPos = p.clone()
+    .addScaledVector(dir, -followDist)
+    .add(new THREE.Vector3(0, followDist*0.55, 0));
+  cam.position.copy(camPos);
+  cam.lookAt(p.clone().add(new THREE.Vector3(0, 3, 0)));
+}
 
-  await loadAvatar(avatarFile.download_url);
-  for(const w of worldsFiles) await loadWorld(w.download_url);
-  layout();
-  msg("running");
+/* ---------------- Mobile controls (FOLLOW mode) ----------------
+   Left stick: MOVE (FAST) – this is the SLOWEST speed already (no sprint).
+   Right stick: LOOK ONLY, smoothed and less reactive.
+*/
+const leftPad = document.getElementById('left');
+const rightPad = document.getElementById('right');
+
+let moveX = 0, moveY = 0;   // left stick (x=strafe, y=fwd/back)
+let lookX = 0, lookY = 0;   // right stick (x=yaw, y=pitch)
+let upHeld = false, downHeld = false;
+
+// speed: base already fast, and you asked “increase 5x”
+const MOVE_SPEED = 0.85;      // per-frame feel; tuned to be fast on iPhone
+const VERTICAL_SPEED = 0.65;  // up/down speed
+const LOOK_SENS = 0.045;      // smaller = less reactive
+const LOOK_SMOOTH = 0.18;     // higher = smoother (less twitch)
+
+// deadzone + easing to avoid “janky”
+function applyStick(dx, dy){
+  const dz = 0.08;
+  let x = Math.abs(dx) < dz ? 0 : dx;
+  let y = Math.abs(dy) < dz ? 0 : dy;
+  // ease curve for finesse
+  x = easeExpo(x);
+  y = easeExpo(y);
+  return [x,y];
+}
+
+function bindPad(el, onMove){
+  const stick = el.querySelector('.stick');
+  let pid = null;
+  el.addEventListener('pointerdown', e=>{
+    pid = e.pointerId;
+    el.setPointerCapture(pid);
+  });
+  el.addEventListener('pointermove', e=>{
+    if(e.pointerId !== pid) return;
+    const r = el.getBoundingClientRect();
+    const dx = (e.clientX-(r.left+r.width/2))/(r.width/2);
+    const dy = (e.clientY-(r.top+r.height/2))/(r.height/2);
+    const clx = clamp(dx, -1, 1);
+    const cly = clamp(dy, -1, 1);
+    const [x,y] = applyStick(clx, cly);
+    onMove(x,y);
+    stick.style.transform = `translate(${clx*42}px,${cly*42}px)`;
+  });
+  const end = ()=>{
+    pid = null;
+    onMove(0,0);
+    stick.style.transform = `translate(0,0)`;
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+bindPad(leftPad, (x,y)=>{ moveX = x; moveY = y; });
+bindPad(rightPad,(x,y)=>{ lookX = x; lookY = y; });
+
+const upBtn = document.getElementById('upBtn');
+const downBtn = document.getElementById('downBtn');
+
+function bindHold(btn, setter){
+  btn.addEventListener('pointerdown', e=>{ e.preventDefault(); setter(true); btn.setPointerCapture(e.pointerId); });
+  btn.addEventListener('pointerup', e=>{ e.preventDefault(); setter(false); });
+  btn.addEventListener('pointercancel', e=>{ e.preventDefault(); setter(false); });
+}
+bindHold(upBtn, v=>upHeld=v);
+bindHold(downBtn,v=>downHeld=v);
+
+/* ---------------- Desktop keyboard (optional) ---------------- */
+const keys = {};
+addEventListener('keydown', e=>keys[e.key.toLowerCase()] = true);
+addEventListener('keyup', e=>keys[e.key.toLowerCase()] = false);
+
+/* ---------------- UI buttons ---------------- */
+document.getElementById('prevBtn').onclick = ()=>{ currentIndex = (currentIndex-1+worlds.length)%worlds.length; focusCurrent(); };
+document.getElementById('nextBtn').onclick = ()=>{ currentIndex = (currentIndex+1)%worlds.length; focusCurrent(); };
+document.getElementById('focusBtn').onclick = ()=>{ focusCurrent(true); };
+document.getElementById('resetBtn').onclick = ()=>{ if(mode==="OVERWATCH") resetOverwatchCam(true); else recenterFollow(); };
+
+function focusCurrent(forceOverwatch=false){
+  if(!worlds.length) return;
+  const w = worlds[currentIndex];
+  const p = w.obj.getWorldPosition(new THREE.Vector3());
+  if(mode==="OVERWATCH" || forceOverwatch){
+    owTarget.copy(p);
+    // zoom to the selected world
+    owDist = 120;
+    resetOverwatchCam(false);
+  }else{
+    // in FOLLOW, teleport avatar near selected world
+    if(avatar){
+      avatar.position.set(p.x, 6, p.z + 10);
+      recenterFollow();
+    }
+  }
+  updateInfo();
+}
+
+function updateInfo(extra=""){
+  const worldName = worlds[currentIndex]?.name || "(none)";
+  const counts = `World ${currentIndex+1}/${worlds.length}`;
+  const m = (mode==="OVERWATCH")
+    ? "OVERWATCH: pinch=zoom • 1-finger=orbit • 2-finger=pan"
+    : "FOLLOW: left=move (FAST) • right=look (smooth) • Up/Down";
+  logInfo(`${counts}\n${m}\nCurrent: ${worldName}${extra?`\n${extra}`:""}`);
+}
+
+/* ---------------- Overwatch touch gestures ---------------- */
+let touch1 = null, touch2 = null;
+let lastPinchDist = 0;
+
+function getTouches(e){
+  // using pointer events is messy for pinch; just use Touch events on canvas
+  return e.touches ? [...e.touches] : [];
+}
+
+canvas.addEventListener('touchstart', (e)=>{
+  if(mode !== "OVERWATCH") return;
+  e.preventDefault();
+  const t = getTouches(e);
+  if(t.length===1){
+    touch1 = {x:t[0].clientX, y:t[0].clientY};
+  }else if(t.length>=2){
+    touch1 = {x:t[0].clientX, y:t[0].clientY};
+    touch2 = {x:t[1].clientX, y:t[1].clientY};
+    lastPinchDist = Math.hypot(touch1.x-touch2.x, touch1.y-touch2.y);
+  }
+},{passive:false});
+
+canvas.addEventListener('touchmove', (e)=>{
+  if(mode !== "OVERWATCH") return;
+  e.preventDefault();
+  const t = getTouches(e);
+
+  if(t.length===1 && touch1){
+    const dx = (t[0].clientX - touch1.x);
+    const dy = (t[0].clientY - touch1.y);
+    touch1.x = t[0].clientX; touch1.y = t[0].clientY;
+
+    owYaw -= dx * 0.005;
+    owPitch -= dy * 0.005;
+    owPitch = clamp(owPitch, -1.45, -0.25); // keep looking down
+    resetOverwatchCam(false);
+  }
+
+  if(t.length>=2){
+    const a = {x:t[0].clientX, y:t[0].clientY};
+    const b = {x:t[1].clientX, y:t[1].clientY};
+    const d = Math.hypot(a.x-b.x, a.y-b.y);
+
+    // pinch zoom
+    const dd = d - lastPinchDist;
+    lastPinchDist = d;
+    owDist *= (1 - dd * 0.0025);
+    owDist = clamp(owDist, 60, 900);
+
+    // 2-finger pan: move target based on midpoint delta
+    const mx = (a.x+b.x)/2;
+    const my = (a.y+b.y)/2;
+    if(touch1 && touch2){
+      const pmx = (touch1.x+touch2.x)/2;
+      const pmy = (touch1.y+touch2.y)/2;
+      const pdx = mx - pmx;
+      const pdy = my - pmy;
+
+      // pan in camera plane
+      const right = new THREE.Vector3(1,0,0).applyQuaternion(cam.quaternion);
+      const forward = new THREE.Vector3(0,0,1).applyQuaternion(cam.quaternion);
+      right.y=0; forward.y=0; right.normalize(); forward.normalize();
+
+      const panScale = owDist * 0.002;
+      owTarget.addScaledVector(right, -pdx*panScale);
+      owTarget.addScaledVector(forward,  pdy*panScale);
+    }
+    touch1 = a; touch2 = b;
+
+    resetOverwatchCam(false);
+  }
+},{passive:false});
+
+canvas.addEventListener('touchend', (e)=>{
+  if(mode !== "OVERWATCH") return;
+  e.preventDefault();
+  const t = getTouches(e);
+  if(t.length===0){ touch1=null; touch2=null; }
+},{passive:false});
+
+/* ---------------- Load everything ---------------- */
+(async function boot(){
+  logInfo("booting… discovering /glb/*.glb");
+  const glbs = await discoverGlbs();
+
+  if(!glbs.length){
+    logInfo("No GLBs found in /glb/. Put files into /glb/ then refresh.");
+    // still show camera
+    resetOverwatchCam(true);
+    return;
+  }
+
+  // pick avatar as first file with 'avatar' in name (or none)
+  const avatarUrl = glbs.find(u => fileNameFromUrl(u).toLowerCase().includes('avatar')) || null;
+  const worldUrls = glbs.filter(u => u !== avatarUrl);
+
+  logInfo(`Found ${glbs.length} GLBs\nWorlds=${worldUrls.length} Avatar=${avatarUrl? "YES":"NO"}\nLoading…`);
+
+  // Load avatar
+  if(avatarUrl){
+    try{
+      const g = await loader.loadAsync(avatarUrl);
+      avatar = g.scene;
+      avatar.name = "avatar";
+      centerToGround(avatar);
+      normalizeToDiameter(avatar, 10); // keep avatar reasonable
+      avatar.position.set(0, 6, 0);
+      scene.add(avatar);
+    }catch(e){
+      avatar = null;
+    }
+  }
+
+  // Load worlds
+  const loaded = [];
+  for(const url of worldUrls){
+    try{
+      const g = await loader.loadAsync(url);
+      const obj = g.scene;
+      obj.name = fileNameFromUrl(url);
+      centerToGround(obj);
+
+      // Normalize world display size so they don't overlap
+      normalizeToDiameter(obj, TARGET_WORLD_DIAM);
+
+      const item = {
+        name: obj.name,
+        url,
+        obj,
+        category: classify(obj.name)
+      };
+      loaded.push(item);
+    }catch(e){
+      // ignore broken ones
+    }
+  }
+
+  // Add grid + recenter
+  for(const it of loaded) scene.add(it.obj);
+  const gridGroup = placeOnGrid(loaded);
+
+  // store worlds list (as placed objects)
+  worlds.push(...loaded);
+
+  // If zero worlds loaded, still run
+  if(!worlds.length){
+    logInfo("Loaded 0 worlds (GLBs may be invalid). Avatar may still load.");
+    resetOverwatchCam(true);
+    return;
+  }
+
+  // Start with a good overwatch framing based on grid bounding box
+  const box = new THREE.Box3().setFromObject(gridGroup);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  owTarget.copy(center);
+
+  // pick distance based on content size
+  owDist = clamp(size.length() * 1.15, 140, 850);
+  owYaw = 0;
+  owPitch = -1.05;
+  resetOverwatchCam(false);
+
+  currentIndex = 0;
+  updateInfo(`\nTip: tap Mode to FOLLOW and fly the avatar to a world.`);
 })();
 
-engine.runRenderLoop(()=>scene.render());
-window.addEventListener("resize",()=>engine.resize());
+/* ---------------- Main loop ---------------- */
+let lookVX=0, lookVY=0;
+
+function tick(){
+  // FOLLOW mode controls
+  if(mode === "FOLLOW" && avatar){
+    // Smooth look input (less reactive)
+    lookVX += (lookX - lookVX) * LOOK_SMOOTH;
+    lookVY += (lookY - lookVY) * LOOK_SMOOTH;
+
+    // update follow yaw/pitch
+    followYaw += (-lookVX) * LOOK_SENS;
+    followPitch += (lookVY) * LOOK_SENS;
+    followPitch = clamp(followPitch, -1.1, 0.1);
+
+    // movement: left stick only
+    // camera-forward relative movement
+    const fwd = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
+    const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+
+    // forward/back is -moveY (because touch dy positive is downward)
+    const forwardAmt = -moveY;
+    const strafeAmt  = moveX;
+
+    const vel = new THREE.Vector3()
+      .addScaledVector(fwd, forwardAmt)
+      .addScaledVector(right, strafeAmt);
+
+    if(vel.lengthSq() > 0.0001){
+      vel.normalize().multiplyScalar(MOVE_SPEED);
+      avatar.position.add(vel);
+    }
+
+    // vertical
+    let vy = 0;
+    if(upHeld) vy += VERTICAL_SPEED;
+    if(downHeld) vy -= VERTICAL_SPEED;
+    avatar.position.y += vy;
+
+    // keyboard optional
+    if(keys['w']) avatar.position.addScaledVector(fwd, MOVE_SPEED);
+    if(keys['s']) avatar.position.addScaledVector(fwd, -MOVE_SPEED);
+    if(keys['a']) avatar.position.addScaledVector(right, -MOVE_SPEED);
+    if(keys['d']) avatar.position.addScaledVector(right, MOVE_SPEED);
+    if(keys[' ']) avatar.position.y += VERTICAL_SPEED;
+    if(keys['shift']) avatar.position.y -= VERTICAL_SPEED;
+
+    // update camera behind avatar
+    const p = avatar.position.clone();
+    const dir = new THREE.Vector3(Math.sin(followYaw), 0, Math.cos(followYaw));
+    const camPos = p.clone()
+      .addScaledVector(dir, -followDist)
+      .add(new THREE.Vector3(0, followDist*0.62, 0));
+
+    // apply pitch by nudging look target upward/downward
+    cam.position.copy(camPos);
+    const lookAt = p.clone().add(new THREE.Vector3(0, 3.0 + followPitch*6.0, 0));
+    cam.lookAt(lookAt);
+  }
+
+  renderer.render(scene, cam);
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* ---------------- Default: start overwatch ---------------- */
+setMode("OVERWATCH");
+
 </script>
 </body>
 </html>
