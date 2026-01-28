@@ -479,108 +479,85 @@ Minimap dots + beacons always show worlds.`);
       const b = computeBounds(root.getChildMeshes(false));
       const localCenter = b.ok ? b.center.clone() : BABYLON.Vector3.Zero();
       const diag = b.ok ? b.diag : 200;
-
-      worlds.push({name:g.name, root, diag, pos:new BABYLON.Vector3(0,0,0), localCenter, beacon});
-    }catch(e){
-      worlds.push({name:g.name, root:null, diag:200, pos:new BABYLON.Vector3(0,0,0), localCenter:BABYLON.Vector3.Zero(), beacon});
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Babylon Load GLBs</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
     }
-  }
-
-  layoutWorlds();
-  for(const w of worlds){ if(w.beacon) w.beacon.setEnabled(showBeacons); }
-
-  // avatar
-  if(avatarFile){
-    try{
-      const root = new BABYLON.TransformNode("AVATAR_ROOT", scene);
-      const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", avatarFile.url, scene);
-      res.meshes.forEach(m=>{ m.parent=root; m.isPickable=true; avatarForceVisible(m); });
-      scaleAvatarToHuman(root);
-      avatar = {root, yaw:0, pitch:0};
-      avatarLoaded = true;
-      follow.lockedTarget = root;
-    }catch(e){
-      avatarLoaded = false;
-      follow.lockedTarget = proof;
+    canvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
     }
-  } else {
-    avatarLoaded = false;
-    follow.lockedTarget = proof;
-  }
+  </style>
+</head>
+<body>
 
-  if(worlds.length) focusWorld(0);
-  else say("No worlds loaded.");
-}
+<canvas id="renderCanvas"></canvas>
 
-// Movement feel + stick-only look
-let moveVel = new BABYLON.Vector3(0,0,0);
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
-scene.onBeforeRenderObservable.add(()=>{
-  const dt = Math.min(0.05, engine.getDeltaTime()/1000);
-  proof.rotation.y += 0.01;
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
 
-  const node = currentTarget();
+const createScene = async () => {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
-  // input
-  let f=0,s=0,u=0;
-  if(keys.has("KeyW")) f += 1;
-  if(keys.has("KeyS")) f -= 1;
-  if(keys.has("KeyD")) s += 1;
-  if(keys.has("KeyA")) s -= 1;
-  if(keys.has("KeyE")) u += 1;
-  if(keys.has("KeyQ")) u -= 1;
+  const camera = new BABYLON.ArcRotateCamera(
+    "camera",
+    Math.PI / 2,
+    Math.PI / 2.5,
+    12,
+    BABYLON.Vector3.Zero(),
+    scene
+  );
+  camera.attachControl(canvas, true);
 
-  f += deadzoneCurve(rawMove.y, 0.10, 1.55);
-  s += deadzoneCurve(rawMove.x, 0.10, 1.55);
-  if(upHeld) u += 1;
-  if(downHeld) u -= 1;
+  new BABYLON.HemisphericLight(
+    "light",
+    new BABYLON.Vector3(0, 1, 0),
+    scene
+  );
 
-  // look
-  let yaw = 0;
-  if(avatarLoaded && avatar){
-    const lx = deadzoneCurve(rawLook.x, 0.08, 1.25);
-    const ly = deadzoneCurve(rawLook.y, 0.08, 1.25);
+  // 🔑 Load GLB list
+  const response = await fetch("./glb/index.json");
+  const glbFiles = await response.json();
 
-    avatar.yaw += lx * 2.8 * dt;
-    avatar.pitch += ly * 2.0 * dt;
-    avatar.pitch = Math.max(-0.75, Math.min(0.75, avatar.pitch));
+  // Load each GLB
+  glbFiles.forEach((file) => {
+    BABYLON.SceneLoader.Append(
+      "./glb/",
+      file,
+      scene,
+      () => console.log("Loaded:", file),
+      null,
+      (scene, message) => console.error("Error loading", file, message)
+    );
+  });
 
-    node.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(0, avatar.yaw, 0);
-    follow.heightOffset = 2.8 + (avatar.pitch * 2.2);
-    yaw = avatar.yaw;
-  }
+  return scene;
+};
 
-  const forward = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const right   = new BABYLON.Vector3(Math.sin(yaw + Math.PI/2), 0, Math.cos(yaw + Math.PI/2));
-
-  let dir = forward.scale(f).add(right.scale(s));
-  if(dir.lengthSquared() > 1e-6) dir = dir.normalize();
-
-  const sprint = (keys.has("ShiftLeft") || keys.has("ShiftRight") || sprintHeld) ? 3.2 : 1.0;
-  const baseSpeed = 42.0;
-  const accel = 22.0;
-  const damping = 10.0;
-
-  const targetVel = dir.scale(baseSpeed * sprint);
-  const blend = 1 - Math.exp(-accel * dt);
-  moveVel = moveVel.add(targetVel.subtract(moveVel).scale(blend));
-
-  if(targetVel.lengthSquared() < 1e-6){
-    const d = 1 - Math.exp(-damping * dt);
-    moveVel = moveVel.scale(1 - d);
-  }
-
-  node.position.addInPlace(moveVel.scale(dt));
-  node.position.y += u * (18.0 * sprint) * dt;
-
-  drawMinimap();
+createScene().then(scene => {
+  engine.runRenderLoop(() => {
+    scene.render();
+  });
 });
 
-engine.runRenderLoop(()=>scene.render());
-setTimeout(()=>engine.resize(),100);
-window.addEventListener("resize",()=>engine.resize());
-
-loadAll().catch(e=>say(String(e && (e.message||e) || e)));
+window.addEventListener("resize", () => {
+  engine.resize();
+});
 </script>
+
 </body>
 </html>
