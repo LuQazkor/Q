@@ -1,87 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>ICU GLB Viewer</title>
+  <meta charset="utf-8" />
+  <title>Babylon Bulletproof Bootstrap</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
   <style>
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
+      padding: 0;
       overflow: hidden;
       background: #000;
+      touch-action: none;
     }
+
     #renderCanvas {
       width: 100%;
       height: 100%;
       touch-action: none;
     }
+
+    #status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.75);
+      color: #0f0;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      z-index: 10;
+      max-width: 90vw;
+    }
   </style>
 </head>
+
 <body>
-<canvas id="renderCanvas"></canvas>
+  <div id="status">Booting…</div>
+  <canvas id="renderCanvas"></canvas>
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script>
+    const statusEl = document.getElementById("status");
+    const canvas = document.getElementById("renderCanvas");
 
-<script>
-const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true);
+    function log(msg) {
+      console.log(msg);
+      statusEl.textContent = msg;
+    }
 
-const createScene = async () => {
-  const scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color4(0,0,0,1);
+    // --- ENGINE ---
+    log("Creating engine…");
+    const engine = new BABYLON.Engine(canvas, true);
 
-  // Camera (mobile-friendly)
-  const camera = new BABYLON.ArcRotateCamera(
-    "cam",
-    Math.PI / 2,
-    Math.PI / 2.3,
-    8,
-    new BABYLON.Vector3(0, 1.5, 0),
-    scene
-  );
-  camera.attachControl(canvas, true);
-  camera.wheelPrecision = 60;
-  camera.pinchPrecision = 200;
+    // --- SCENE ---
+    log("Creating scene…");
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0.08, 0.08, 0.08, 1);
 
-  // Light
-  new BABYLON.HemisphericLight(
-    "light",
-    new BABYLON.Vector3(0, 1, 0),
-    scene
-  );
+    // --- CAMERA ---
+    log("Creating camera…");
+    const camera = new BABYLON.UniversalCamera(
+      "cam",
+      new BABYLON.Vector3(0, 1.6, -5),
+      scene
+    );
+    camera.attachControl(canvas, true);
+    camera.speed = 0.25;
 
-  // Load ICU room
-  await BABYLON.SceneLoader.AppendAsync(
-    "./glb/",
-    "ICU.glb",
-    scene
-  );
+    // --- LIGHT ---
+    log("Creating light…");
+    const light = new BABYLON.HemisphericLight(
+      "light",
+      new BABYLON.Vector3(0, 1, 0),
+      scene
+    );
+    light.intensity = 1.0;
 
-  // Load avatar
-  const avatarResult = await BABYLON.SceneLoader.ImportMeshAsync(
-    "",
-    "./glb/",
-    "avatar.glb",
-    scene
-  );
+    // --- FALLBACK GROUND (PROVES SCENE IS ALIVE) ---
+    const ground = BABYLON.MeshBuilder.CreateGround(
+      "ground",
+      { width: 10, height: 10 },
+      scene
+    );
 
-  const avatar = avatarResult.meshes[0];
-  avatar.position = new BABYLON.Vector3(0, 0, 0);
-  avatar.scaling = new BABYLON.Vector3(1, 1, 1);
+    log("Scene alive. Starting render loop…");
 
-  camera.target = avatar.position;
+    // --- RENDER LOOP (NEVER BLOCKED) ---
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
 
-  return scene;
-};
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
 
-createScene().then(scene => {
-  engine.runRenderLoop(() => scene.render());
-});
+    // --- SAFE GLB LOADER ---
+    async function loadGLB(path, file) {
+      try {
+        log(`Loading ${file}…`);
+        const result = await BABYLON.SceneLoader.ImportMeshAsync(
+          null,
+          path,
+          file,
+          scene
+        );
+        log(`${file} loaded (${result.meshes.length} meshes)`);
+        return result;
+      } catch (err) {
+        console.error(err);
+        log(`${file} FAILED (scene still running)`);
+        return null;
+      }
+    }
 
-window.addEventListener("resize", () => engine.resize());
-</script>
+    // --- ASSET LOAD (NON-BLOCKING) ---
+    (async () => {
+      await loadGLB("glb/", "ICU.glb");
+      await loadGLB("glb/", "avatar.glb");
+      log("Boot complete.");
+    })();
+  </script>
 </body>
 </html>
